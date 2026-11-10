@@ -33,6 +33,14 @@ class _FakeBackend implements ImagePickerBackend {
     final n = idx < sizes.length ? sizes[idx] : sizes.last;
     return Uint8List(n);
   }
+
+  @override
+  Future<Uint8List> compressBytes(
+    Uint8List bytes, {
+    required int maxSide,
+    required int quality,
+  }) async =>
+      compress('', maxSide: maxSide, quality: quality);
 }
 
 void main() {
@@ -79,5 +87,33 @@ void main() {
       () => svc.pickFromCamera(),
       throwsA(isA<ImagePermissionDeniedException>()),
     );
+  });
+
+  test('processImageBytes returns null on empty input and compresses non-empty bytes', () async {
+    final backend = _FakeBackend()..sizes = [1600 * 1024, 240 * 1024];
+    final svc = ImagePickerService(backend);
+
+    expect(await svc.processImageBytes(Uint8List(0), 'image/png'), isNull);
+    expect(backend.calls, isEmpty);
+
+    final result = await svc.processImageBytes(
+      Uint8List.fromList([1, 2, 3, 4]),
+      'image/png',
+    );
+    expect(result, isNotNull);
+    expect(result!.bytes.length, 240 * 1024);
+    expect(result.mime, 'image/jpeg');
+    expect(backend.calls.length, 2);
+  });
+
+  test('processImageBytes preserves original mime when compressor returns empty fallback', () async {
+    final backend = _FakeBackend()..sizes = [0];
+    final svc = ImagePickerService(backend);
+    final raw = Uint8List.fromList([137, 80, 78, 71]);
+
+    final result = await svc.processImageBytes(raw, 'image/png');
+    expect(result, isNotNull);
+    expect(result!.bytes, same(raw));
+    expect(result.mime, 'image/png');
   });
 }

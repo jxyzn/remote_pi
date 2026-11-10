@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:app/config/dependencies.dart';
 import 'package:app/data/actions/actions_repository.dart' show ActionFailure;
+import 'package:app/data/preferences/preferences.dart';
 import 'package:app/protocol/protocol.dart';
 import 'package:app/routing/adaptive.dart';
 import 'package:app/ui/core/themes/themes.dart';
@@ -97,13 +98,18 @@ class _QuickActionsSheetBodyState extends State<QuickActionsSheetBody> {
   /// popped on success.
   void _toast(String message, Color color) {
     final colors = widget.messenger.context.colors;
+    final typo = widget.messenger.context.typo;
     widget.messenger.showSnackBar(
       SnackBar(
         backgroundColor: colors.surface,
         behavior: SnackBarBehavior.floating,
         content: Text(
           message,
-          style: TextStyle(fontFamily: kMonoFamily, fontSize: 12, color: color),
+          style: typo.sansSmall.copyWith(
+            fontSize: 12.5,
+            fontWeight: FontWeight.w600,
+            color: color,
+          ),
         ),
         duration: const Duration(seconds: 3),
       ),
@@ -121,6 +127,12 @@ class _QuickActionsSheetBodyState extends State<QuickActionsSheetBody> {
     final vm = context.watch<QuickActionsViewModel>();
     final state = vm.state;
     final busyAction = state is QuickActionsBusy ? state.action : null;
+    Preferences? prefs;
+    try {
+      prefs = context.watch<Preferences>();
+    } catch (_) {
+      // Preferences not available in some widget test harnesses
+    }
 
     return SafeArea(
       top: false,
@@ -165,6 +177,13 @@ class _QuickActionsSheetBodyState extends State<QuickActionsSheetBody> {
               busy: busyAction == ActionName.thinkingSet,
               onPick: (level) => _onThinking(vm, level),
             ),
+            if (prefs != null) ...[
+              const _Divider(),
+              _VerbosityRow(
+                current: prefs.sessionVerbosity,
+                onPick: prefs.setSessionVerbosity,
+              ),
+            ],
             const SizedBox(height: 18),
           ],
         ),
@@ -199,35 +218,28 @@ class _QuickActionsSheetBodyState extends State<QuickActionsSheetBody> {
       // dialog regardless of which navigator it sits on.
       builder: (dCtx) {
         final colors = dCtx.colors;
+        final typo = dCtx.typo;
         return AlertDialog(
-          backgroundColor: colors.bg,
+          backgroundColor: colors.surface,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-            side: BorderSide(color: colors.border),
+            borderRadius: BorderRadius.circular(10),
+            side: BorderSide(color: colors.border, width: 2),
           ),
           title: Text(
             'Start a new session?',
-            style: TextStyle(
-              fontFamily: kMonoFamily,
-              fontSize: 14,
-              color: colors.text,
-            ),
+            style: typo.sansTitle,
           ),
           content: Text(
             'This clears the Pi-side conversation history. The current '
             'thread cannot be resumed.',
-            style: TextStyle(
-              fontFamily: kMonoFamily,
-              fontSize: 12,
-              color: colors.muted,
-            ),
+            style: typo.sansSmall.copyWith(color: colors.muted2),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dCtx).pop(false),
               child: Text(
                 'Cancel',
-                style: TextStyle(fontFamily: kMonoFamily, color: colors.muted),
+                style: typo.sansBody.copyWith(color: colors.muted2),
               ),
             ),
             FilledButton(
@@ -236,10 +248,7 @@ class _QuickActionsSheetBodyState extends State<QuickActionsSheetBody> {
                 foregroundColor: colors.onAccent,
               ),
               onPressed: () => Navigator.of(dCtx).pop(true),
-              child: const Text(
-                'Start new',
-                style: TextStyle(fontFamily: kMonoFamily),
-              ),
+              child: const Text('Start new'),
             ),
           ],
         );
@@ -303,16 +312,14 @@ class _SheetTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 10),
+      padding: const EdgeInsets.fromLTRB(18, 6, 18, 8),
       child: Align(
         alignment: Alignment.centerLeft,
         child: Text(
-          text,
-          style: TextStyle(
-            fontFamily: kMonoFamily,
-            fontSize: 12,
-            color: context.colors.muted,
-            letterSpacing: 0.4,
+          text.toUpperCase(),
+          style: context.typo.badge.copyWith(
+            color: context.colors.muted2,
+            letterSpacing: 0.8,
           ),
         ),
       ),
@@ -345,34 +352,27 @@ class _ActionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final typo = context.typo;
     return InkWell(
       onTap: busy ? null : onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
         child: Row(
           children: [
             Icon(icon, color: colors.accent, size: 18),
-            const SizedBox(width: 14),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     label,
-                    style: TextStyle(
-                      fontFamily: kMonoFamily,
-                      fontSize: 13,
-                      color: colors.text,
-                    ),
+                    style: typo.sansTitle.copyWith(fontSize: 13.5),
                   ),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: 1),
                   Text(
                     subtitle,
-                    style: TextStyle(
-                      fontFamily: kMonoFamily,
-                      fontSize: 11,
-                      color: colors.muted,
-                    ),
+                    style: typo.sansSmall.copyWith(color: colors.muted2),
                   ),
                 ],
               ),
@@ -409,34 +409,35 @@ class _ModelRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final typo = context.typo;
     final label = currentLabel ?? (busy ? 'Switching…' : 'Choose a model');
     return InkWell(
       key: const Key('qa-model-row'),
       onTap: busy ? null : onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
         child: Row(
           children: [
             Icon(LucideIcons.memoryStick, color: colors.accent, size: 18),
-            const SizedBox(width: 14),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     'Model',
-                    style: TextStyle(
-                      fontFamily: kMonoFamily,
-                      fontSize: 11,
-                      color: colors.muted,
+                    style: typo.sansSmall.copyWith(
+                      fontSize: 11.5,
+                      color: colors.muted2,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     label,
-                    style: TextStyle(
-                      fontFamily: kMonoFamily,
-                      fontSize: 13,
+                    style: typo.mono.copyWith(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
                       color: colors.text,
                     ),
                   ),
@@ -474,22 +475,19 @@ class _ThinkingRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final typo = context.typo;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
               Icon(LucideIcons.brain, color: colors.accent, size: 18),
-              const SizedBox(width: 14),
+              const SizedBox(width: 12),
               Text(
                 'Thinking',
-                style: TextStyle(
-                  fontFamily: kMonoFamily,
-                  fontSize: 11,
-                  color: colors.muted,
-                ),
+                style: typo.sansTitle.copyWith(fontSize: 13.5),
               ),
               const Spacer(),
               if (busy)
@@ -503,7 +501,7 @@ class _ThinkingRow extends StatelessWidget {
                 ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           _ThinkingSegmented(current: current, disabled: busy, onPick: onPick),
         ],
       ),
@@ -534,11 +532,15 @@ class _ThinkingSegmented extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colors;
     return Container(
       decoration: BoxDecoration(
-        border: Border.all(color: context.colors.border),
-        borderRadius: BorderRadius.circular(6),
+        color: colors.surface,
+        border: Border.all(color: colors.border, width: 1.5),
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: colors.retroShadowSm,
       ),
+      padding: const EdgeInsets.all(2),
       child: Row(
         children: [
           for (final level in ThinkingLevel.values)
@@ -573,30 +575,100 @@ class _SegButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final typo = context.typo;
     return GestureDetector(
       onTap: disabled ? null : onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 120),
-        padding: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.symmetric(vertical: 7),
         decoration: BoxDecoration(
-          color: selected
-              ? colors.accent.withValues(alpha: 0.15)
-              : Colors.transparent,
+          color: selected ? colors.accent : Colors.transparent,
+          borderRadius: BorderRadius.circular(5),
         ),
         child: Center(
           child: Text(
             label,
-            style: TextStyle(
-              fontFamily: kMonoFamily,
-              fontSize: 11,
+            style: typo.badge.copyWith(
+              fontSize: 10.5,
               color: disabled
                   ? colors.muted.withValues(alpha: 0.5)
                   : selected
-                  ? colors.accent
+                  ? colors.onAccent
                   : colors.text,
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _VerbosityRow extends StatelessWidget {
+  final SessionVerbosity current;
+  final ValueChanged<SessionVerbosity> onPick;
+
+  const _VerbosityRow({
+    required this.current,
+    required this.onPick,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final typo = context.typo;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(LucideIcons.listTree, size: 18, color: colors.accent),
+              const SizedBox(width: 10),
+              Text('Verbosity', style: typo.sansTitle.copyWith(fontSize: 13.5)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          _VerbositySegmented(current: current, onPick: onPick),
+        ],
+      ),
+    );
+  }
+}
+
+class _VerbositySegmented extends StatelessWidget {
+  final SessionVerbosity current;
+  final ValueChanged<SessionVerbosity> onPick;
+
+  const _VerbositySegmented({
+    required this.current,
+    required this.onPick,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Container(
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border.all(color: colors.border, width: 1.5),
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: colors.retroShadowSm,
+      ),
+      padding: const EdgeInsets.all(2),
+      child: Row(
+        children: [
+          for (final level in SessionVerbosity.values)
+            Expanded(
+              child: _SegButton(
+                key: Key('qa-verbosity-${level.id}'),
+                label: level.label.toLowerCase(),
+                selected: current == level,
+                disabled: false,
+                onTap: () => onPick(level),
+              ),
+            ),
+        ],
       ),
     );
   }

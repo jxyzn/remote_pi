@@ -98,7 +98,7 @@ import { addDaemon, listDaemons, removeDaemon } from "./daemon/registry.js";
 import { callSupervisor, supervisorOnline, SupervisorOfflineError } from "./daemon/client.js";
 import type { ControlRequest, DaemonInfo } from "./daemon/control_protocol.js";
 import { EXIT_DAEMON_FRESH_SESSION } from "./daemon/rpc_child.js";
-import { installService, uninstallService, linkCliBinaries, unlinkCliBinaries, LAUNCHD_LABEL, SYSTEMD_UNIT, WINDOWS_TASK_NAME } from "./daemon/install.js";
+import { installService, uninstallService, linkCliBinaries, unlinkCliBinaries, nonSystemdScriptPath, LAUNCHD_LABEL, SYSTEMD_UNIT, WINDOWS_TASK_NAME } from "./daemon/install.js";
 import {
   defaultAgentName,
   effectiveAutoStartRelay,
@@ -1238,6 +1238,7 @@ function _detachPeerChannel(appPeerId: string): void {
   if (!ch) return;
   try { ch.detach(); } catch { /* best-effort */ }
   _activePeers.delete(appPeerId);
+  _lastPairedTokenByPeer.delete(appPeerId);
   if (_peerShort === appPeerId.slice(0, 8)) {
     // Pick a different remaining peer for the UX hint, or clear when none.
     const next = _activePeers.keys().next().value;
@@ -1417,6 +1418,7 @@ function _goIdle(byeReason?: import("./protocol/types.js").ByeReason): void {
     try { ch.detach(); } catch { /* best-effort */ }
   }
   _activePeers.clear();
+  _lastPairedTokenByPeer.clear();
   _peerShort = "";
   _currentTurnId = null;
   _pendingReceivedImagePreviews.length = 0;
@@ -1477,6 +1479,7 @@ function _onRelayClose(closedRelay: RelayClient): void {
   }
   if (_queuedItems.length > 0) _resetQueuedItems({ broadcast: true });
   _activePeers.clear();
+  _lastPairedTokenByPeer.clear();
   _peerShort = "";
   _currentTurnId = null;
   _pendingSteers = [];
@@ -1853,8 +1856,6 @@ function _installAutoListener(relay: RelayClient): () => void {
     if (!outer.peer || !outer.ct) return;
 
     if (!hasListenerAuthority()) return;
-    // Already-attached owners: their PlainPeerChannel handles routing.
-    if (_activePeers.has(outer.peer)) return;
 
     // Decode inner envelope (base64 JSON)
     let inner: ClientMessage;
@@ -1872,9 +1873,17 @@ function _installAutoListener(relay: RelayClient): () => void {
     const appPeerId = outer.peer;
 
     if (inner.type === "pair_request") {
+      // If already attached with the exact same token, ignore duplicate retry
+      // for idempotency; if scanning a fresh QR token, handle re-pairing!
+      if (_activePeers.has(appPeerId) && _lastPairedTokenByPeer.get(appPeerId) === inner.token) {
+        return;
+      }
       await _handlePairRequest(relay, appPeerId, inner, hasListenerAuthority);
       return;
     }
+
+    // Already-attached owners: their PlainPeerChannel handles routing.
+    if (_activePeers.has(outer.peer)) return;
 
     // Reconnect path: known peer (peers.json) without an active channel
     // sends a non-pair message → attach + route through the new channel.
@@ -1931,6 +1940,7 @@ const _HARNESS = {
   version: _readExtensionVersion(),
 } as const;
 const _HOSTNAME = hostname();
+const _lastPairedTokenByPeer = new Map<string, string>();
 
 async function _handlePairRequest(
   relay: RelayClient,
@@ -1994,6 +2004,7 @@ async function _handlePairRequest(
   // in the terminal title and in /remote-pi status.
   const sessionName = _displayName(cwd);
 
+  _lastPairedTokenByPeer.set(appPeerId, inner.token);
   _attachOwner(relay, appPeerId, inner.device_name);
 
   sendInner({
@@ -4074,8 +4085,8 @@ function _wakeAgent(
   }
   try {
     const options = steeringBehavior
-      ? ({ deliverAs: steeringBehavior })
-      : undefined;
+      ? ({ deliverAs: steeringBehavior, expandPromptTemplates: true })
+      : ({ expandPromptTemplates: true });
     _pi.sendUserMessage(content, options);
     return { ok: true };
   } catch (err) {
@@ -4458,6 +4469,23 @@ export function _routeClientMessageFrom(
           const detail = error instanceof Error ? error.message : String(error);
           console.error(`[remote-pi] failed delivering image message id=${msg.id}: ${detail}`);
         });
+        break;
+      }
+
+      const trimmedCmd = typeof msg.text === "string" ? msg.text.trim() : "";
+      if (/^\/(new|reset|clear)$/i.test(trimmedCmd)) {
+        sender.send({ type: "cancelled", in_reply_to: msg.id, target_id: msg.id });
+        _routeClientMessageFrom(sender, { type: "session_new", id: msg.id }, ctx);
+        break;
+      }
+      if (/^\/compact(?:\s+.*)?$/i.test(trimmedCmd)) {
+        sender.send({ type: "cancelled", in_reply_to: msg.id, target_id: msg.id });
+        _routeClientMessageFrom(sender, { type: "session_compact", id: msg.id }, ctx);
+        break;
+      }
+      if (/^\/reload$/i.test(trimmedCmd) && process.env["REMOTE_PI_DAEMON"] === "1") {
+        _echoUserMessage(msg, shouldSteer);
+        setTimeout(() => process.exit(1), 100);
         break;
       }
 
@@ -5043,6 +5071,16 @@ function _restartSupervisor(): void {
   }
   for (const step of steps) {
     const r = spawnSync(step.cmd, step.args, { stdio: ["ignore", "pipe", "pipe"], encoding: "utf8" });
+    if ((r.error || r.status !== 0) && process.platform === "linux") {
+      const fallback = nonSystemdScriptPath(process.env.HOME);
+      if (existsSync(fallback)) {
+        const fb = spawnSync(fallback, ["--restart"], { stdio: ["ignore", "pipe", "pipe"], encoding: "utf8" });
+        if (!fb.error && fb.status === 0) {
+          console.log("[remote-pi] Supervisor restarted (non-systemd fallback).");
+          return;
+        }
+      }
+    }
     if (r.error) {
       if (step.ignoreFailure) continue;
       console.error(`[remote-pi] restart-supervisor failed: ${step.cmd} not runnable (${r.error.message}). Is the service installed? Run \`remote-pi install\`.`);

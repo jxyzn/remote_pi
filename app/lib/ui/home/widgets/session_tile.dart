@@ -47,32 +47,34 @@ class SessionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colors;
     return Material(
-      color: colors.bg,
+      color: colors.surface,
       child: InkWell(
         onTap: onOpen,
         onLongPress: onLongPress,
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: isSelected ? colors.accent.withValues(alpha: 0.06) : colors.bg,
+            color: isSelected
+                ? colors.accent.withValues(alpha: 0.12)
+                : colors.surface,
             border: Border(
               left: BorderSide(
                 color: isSelected ? colors.accent : Colors.transparent,
-                width: 3,
+                width: 4,
               ),
             ),
           ),
           child: Padding(
-            // Trim the left inset by the 3px accent bar so content stays
-            // aligned whether selected or not.
-            padding: EdgeInsets.fromLTRB(isSelected ? 15 : 18, 14, 18, 14),
+            // Compact vertical inset so more sessions fit on screen.
+            padding: EdgeInsets.fromLTRB(isSelected ? 8 : 12, 9, 12, 9),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 _Avatar(name: _avatarName()),
-                const SizedBox(width: 14),
+                const SizedBox(width: 11),
                 Expanded(
                   child: _TitleBlock(peer: peer, room: room),
                 ),
+                const SizedBox(width: 8),
                 _PresenceDot(
                   isLive: isLive,
                   isReconnecting: isReconnecting,
@@ -129,7 +131,11 @@ class _PresenceDot extends StatelessWidget {
     return Container(
       width: 10,
       height: 10,
-      decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(3),
+        color: color,
+        border: Border.all(color: colors.border, width: 1.2),
+      ),
     );
   }
 }
@@ -142,10 +148,10 @@ class _TitleBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final typo = context.typo;
     final r = room;
     // Title preference: explicit room.name → cwd basename → peer
-    // nickname → session name. The cwd path line was dropped on purpose
-    // — the tile now shows just title + subtitle (model / paired date).
+    // nickname → session name.
     final String title;
     if (r != null) {
       if (r.name != null && r.name!.isNotEmpty) {
@@ -163,6 +169,9 @@ class _TitleBlock extends StatelessWidget {
           peer.nickname?.isNotEmpty == true ? peer.nickname! : peer.sessionName;
     }
 
+    final model = room?.model;
+    final hasModel = model != null && model.isNotEmpty;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -171,32 +180,41 @@ class _TitleBlock extends StatelessWidget {
           title,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: TextStyle(
+          style: typo.sansTitle.copyWith(
             color: colors.text,
-            fontSize: 15,
-            fontWeight: FontWeight.w500,
+            fontSize: 14.5,
           ),
         ),
         const SizedBox(height: 3),
-        // Subtitle = the Pi-extension's model (when surfaced via
-        // `room_announced` / `room_meta_updated`), else the legacy
-        // "Last paired" timestamp so the row keeps a stable height.
-        Builder(builder: (_) {
-          final model = room?.model;
-          final hasModel = model != null && model.isNotEmpty;
-          return Text(
-            hasModel
-                ? _truncateModel(model)
-                : 'Last paired: ${_relativeTime(peer.pairedAt)}',
+        if (hasModel)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+            decoration: BoxDecoration(
+              color: colors.modelBadgeBg,
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: colors.modelBadgeBorder, width: 1),
+            ),
+            child: Text(
+              _truncateModel(model),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: typo.monoSmall.copyWith(
+                color: colors.text,
+                fontSize: 10.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          )
+        else
+          Text(
+            'Last paired: ${_relativeTime(peer.pairedAt)}',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: hasModel ? colors.accent : colors.muted,
-              fontSize: 12,
-              fontFamily: kMonoFamily,
+            style: typo.sansSmall.copyWith(
+              color: colors.muted,
+              fontSize: 11.5,
             ),
-          );
-        }),
+          ),
       ],
     );
   }
@@ -212,23 +230,25 @@ class _Avatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final typo = context.typo;
     final initial = _initial(name);
+    final badgeColor = colors.avatarColorFor(name);
     return Container(
-      width: 40,
-      height: 40,
+      width: 34,
+      height: 34,
       decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: colors.surface,
-        border: Border.all(color: colors.border),
+        borderRadius: BorderRadius.circular(7),
+        color: badgeColor.withValues(alpha: 0.18),
+        border: Border.all(color: colors.border, width: 1.5),
+        boxShadow: colors.retroShadowSm,
       ),
       alignment: Alignment.center,
       child: Text(
         initial,
-        style: TextStyle(
-          color: colors.accent,
-          fontFamily: kMonoFamily,
-          fontSize: 16,
-          fontWeight: FontWeight.w600,
+        style: typo.display.copyWith(
+          color: badgeColor,
+          fontSize: 14,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );

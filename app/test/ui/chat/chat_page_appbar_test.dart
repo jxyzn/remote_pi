@@ -22,7 +22,9 @@ import 'package:app/ui/chat/attachment/viewmodels/attachment_viewmodel.dart';
 import 'package:app/ui/chat/chat_page.dart';
 import 'package:app/ui/chat/viewmodels/chat_viewmodel.dart';
 import 'package:app/ui/chat/voice/viewmodels/voice_input_viewmodel.dart';
+import 'package:app/ui/chat/widgets/input_bar.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
@@ -128,9 +130,35 @@ void main() {
       // we know the subtitle isn't just echoing the title fallback.
       expect(find.text('My Project'), findsOneWidget);
 
-      // The info button renders immediately — even with no PeerRecord loaded
-      // (activePeer == null here) — so it never pops in and shifts the AppBar.
+      // The info and search buttons render immediately.
       expect(find.byIcon(LucideIcons.info), findsOneWidget);
+      final searchBtn = find.byKey(const Key('chat-search-button'));
+      expect(searchBtn, findsOneWidget);
+
+      // Tapping search opens search bar with text field.
+      expect(find.byKey(const Key('chat-search-bar')), findsNothing);
+      await tester.tap(searchBtn);
+      await tester.pump();
+      expect(find.byKey(const Key('chat-search-bar')), findsOneWidget);
+      expect(find.byKey(const Key('chat-search-textfield')), findsOneWidget);
+
+      // Tapping close search button closes it.
+      await tester.tap(find.byKey(const Key('chat-search-close-button')));
+      await tester.pump();
+      expect(find.byKey(const Key('chat-search-bar')), findsNothing);
+
+      // Ctrl+F shortcut opens search.
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.keyF);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.keyF);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+      expect(find.byKey(const Key('chat-search-bar')), findsOneWidget);
+
+      // Escape key closes search.
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump();
+      expect(find.byKey(const Key('chat-search-bar')), findsNothing);
 
       // Status dot uses initialOnline before the runtime resolves → shows
       // "online" immediately instead of flashing offline/reconnecting.
@@ -138,6 +166,65 @@ void main() {
 
       // Unmount + dispose in-body (the framework's pending-timer check runs
       // before addTearDown; conn's watchdog must be cancelled here).
+      await tester.pumpWidget(const SizedBox());
+      vm.dispose();
+      attach.dispose();
+      voice.dispose();
+      actions.dispose();
+      sync.dispose();
+      sel.dispose();
+      conn.dispose();
+    },
+  );
+
+  testWidgets(
+    'Status display shows currently selected model and opens quick actions when tapped',
+    (tester) async {
+      final conn = ConnectionManager(
+        factory: (_, _) async => _FakeChannel(),
+        storage: _FakeStorage(),
+      );
+      final boxes = LocalBoxes();
+      final sync = SyncService(conn, boxes);
+      final read = SessionReadRepository(boxes);
+      final prefs = Preferences(_FakeSecureStorage());
+      final actions = ActionsRepository(conn);
+      final vm = ChatViewModel(read, sync, conn, prefs, _FakeStorage());
+      final voice = VoiceInputViewModel(_FakeSpeech());
+      final attach = AttachmentViewModel(_FakePicker(), actions);
+      final sel = SessionSelection();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MultiProvider(
+            providers: [
+              ChangeNotifierProvider<ChatViewModel>.value(value: vm),
+              ChangeNotifierProvider<VoiceInputViewModel>.value(value: voice),
+              ChangeNotifierProvider<AttachmentViewModel>.value(value: attach),
+              ChangeNotifierProvider<Preferences>.value(value: prefs),
+              ChangeNotifierProvider<SessionSelection>.value(value: sel),
+              Provider<IActionsRepository>.value(value: actions),
+            ],
+            child: const ChatPage(
+              initialTitle: 'My Project',
+              initialDevice: 'MacBook Pro',
+              initialModel: 'qwen3.8-27b',
+              initialOnline: true,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      // Status pill displays the model alongside the online indicator
+      expect(find.text('online'), findsOneWidget);
+      expect(find.text('qwen3.8-27b'), findsOneWidget);
+
+      // Verify the status header box is rendered at the bottom, below the input bar
+      final inputBarBox = tester.getRect(find.byType(InputBar));
+      final pillBox = tester.getRect(find.byKey(const Key('chat-status-pill')));
+      expect(pillBox.top, greaterThanOrEqualTo(inputBarBox.bottom));
+
       await tester.pumpWidget(const SizedBox());
       vm.dispose();
       attach.dispose();

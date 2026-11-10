@@ -241,11 +241,14 @@ GoRouter buildRouter(
           // active branch (the master, full-width + centered) so the user
           // doesn't see a cramped 360 column next to a big empty
           // placeholder.
-          final twoPane =
-              isWideLayout(ctx) && !ctx.watch<ShellLayout>().isZeroState;
+          final shell = ctx.watch<ShellLayout>();
+          final twoPane = isWideLayout(ctx) && !shell.isZeroState;
           if (!twoPane) {
             return children[navShell.currentIndex];
           }
+          final collapsed = shell.isSidebarCollapsed;
+          final screenWidth = MediaQuery.sizeOf(ctx).width;
+          final openSidebarWidth = (screenWidth * 0.38).clamp(280.0, 340.0);
           // On a notched iPhone in landscape (width ≥ kTabletBreakpoint, so
           // two-pane), each pane's own SafeArea reads the *full screen* insets
           // and pads the edge facing the divider too — a phantom horizontal
@@ -255,19 +258,27 @@ GoRouter buildRouter(
           // the Scaffold backgrounds keep painting full-bleed.
           return Row(
             children: [
-              SizedBox(
-                width: 360,
-                child: MediaQuery.removePadding(
-                  context: ctx,
-                  removeRight: true,
-                  child: children[0],
+              Offstage(
+                offstage: collapsed,
+                child: SizedBox(
+                  width: openSidebarWidth,
+                  child: MediaQuery.removePadding(
+                    context: ctx,
+                    removeRight: true,
+                    child: children[0],
+                  ),
                 ),
               ),
-              VerticalDivider(width: 1, thickness: 1, color: ctx.colors.border),
+              if (!collapsed)
+                VerticalDivider(
+                  width: 1.5,
+                  thickness: 1.5,
+                  color: ctx.colors.border,
+                ),
               Expanded(
                 child: MediaQuery.removePadding(
                   context: ctx,
-                  removeLeft: true,
+                  removeLeft: !collapsed,
                   child: children[1],
                 ),
               ),
@@ -343,6 +354,7 @@ GoRouter buildRouter(
           final extra = st.extra;
           String? initialTitle;
           String? initialDevice;
+          String? initialModel;
           var initialOnline = false;
           if (extra is Map) {
             final t = extra['title'];
@@ -351,6 +363,8 @@ GoRouter buildRouter(
             // line 2 renders immediately (no async PeerRecord wait).
             final d = extra['device'];
             if (d is String && d.isNotEmpty) initialDevice = d;
+            final m = extra['model'];
+            if (m is String && m.isNotEmpty) initialModel = m;
             // Live state of the tile → initial status dot (no reconnect flash).
             initialOnline = extra['online'] == true;
           }
@@ -363,6 +377,7 @@ GoRouter buildRouter(
             child: ChatPage(
               initialTitle: initialTitle,
               initialDevice: initialDevice,
+              initialModel: initialModel,
               initialOnline: initialOnline,
             ),
           );
@@ -403,6 +418,7 @@ class _DetailPane extends StatelessWidget {
       child: ChatPage(
         initialTitle: sel.current!.title,
         initialDevice: sel.current!.device.isEmpty ? null : sel.current!.device,
+        initialModel: sel.current!.model,
         initialOnline: sel.current!.online,
         showBack: false,
       ),

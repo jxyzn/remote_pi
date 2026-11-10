@@ -3,6 +3,7 @@ import 'package:app/ui/chat/widgets/tool_request_card.dart';
 import 'package:app/ui/core/themes/themes.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 Widget _wrap(Widget child) => MaterialApp(home: Scaffold(body: child));
 
@@ -74,7 +75,9 @@ void main() {
       expect(find.textContaining('60s'), findsNothing);
     });
 
-    testWidgets('completed state shows DONE', (tester) async {
+    testWidgets('completed state shows DONE (expanded in verbose)', (
+      tester,
+    ) async {
       const done = ToolEvent(
         id: 'tc1',
         toolCallId: 'tc1',
@@ -82,7 +85,9 @@ void main() {
         args: {'command': 'ls'},
         status: ToolEventStatus.completed,
       );
-      await tester.pumpWidget(_wrap(const ToolRequestCard(tool: done)));
+      await tester.pumpWidget(
+        _wrap(const ToolRequestCard(tool: done, verbosity: SessionVerbosity.verbose)),
+      );
       expect(find.text('DONE'), findsOneWidget);
       expect(find.textContaining('Done'), findsAny);
     });
@@ -129,7 +134,9 @@ void main() {
         args: {'command': 'ls'},
         status: ToolEventStatus.completed,
       );
-      await tester.pumpWidget(_wrap(const ToolRequestCard(tool: done)));
+      await tester.pumpWidget(
+        _wrap(const ToolRequestCard(tool: done, verbosity: SessionVerbosity.verbose)),
+      );
       expect(outcomeColor(tester, '✓ Done'), AppColors.dark.success);
     });
 
@@ -154,6 +161,176 @@ void main() {
       // pending defaults
       await tester.pumpWidget(_wrap(const ToolRequestCard(tool: _bashTool)));
       expect(outcomeColor(tester, '⏳ Running…'), AppColors.dark.accent);
+    });
+
+    group('Verbosity levels', () {
+      testWidgets('terse mode: tool is initially collapsed into a single line; tap expands', (
+        tester,
+      ) async {
+        await tester.pumpWidget(
+          _wrap(const ToolRequestCard(tool: _bashTool, verbosity: SessionVerbosity.terse)),
+        );
+        // Single-line collapsed row shows tool name and status
+        expect(find.text('BASH'), findsOneWidget);
+        expect(find.text('RUNNING'), findsOneWidget);
+        // Code block ($ prompt) and full outcome are not visible
+        expect(find.text(r'$ '), findsNothing);
+        expect(find.text('⏳ Running…'), findsNothing);
+
+        // Tap collapsed widget to expand
+        await tester.tap(find.byType(ToolRequestCard));
+        await tester.pump();
+
+        expect(find.text(r'$ '), findsOneWidget);
+        expect(find.text('⏳ Running…'), findsOneWidget);
+      });
+
+      testWidgets(
+        'default mode: recent tool calls stay expanded; older completed calls are collapsed',
+        (tester) async {
+          const active = ToolEvent(
+            id: 'tc1',
+            toolCallId: 'tc1',
+            tool: 'Bash',
+            args: {'command': 'cargo check'},
+            status: ToolEventStatus.pending,
+          );
+          await tester.pumpWidget(
+            _wrap(const ToolRequestCard(tool: active, verbosity: SessionVerbosity.defaultLevel, isRecent: true)),
+          );
+          // Active tool call is expanded
+          expect(find.text(r'$ '), findsOneWidget);
+          expect(find.text('⏳ Running…'), findsOneWidget);
+
+          // Recent tool transitions to completed -> remains expanded!
+          const done = ToolEvent(
+            id: 'tc1',
+            toolCallId: 'tc1',
+            tool: 'Bash',
+            args: {'command': 'cargo check'},
+            status: ToolEventStatus.completed,
+          );
+          await tester.pumpWidget(
+            _wrap(const ToolRequestCard(tool: done, verbosity: SessionVerbosity.defaultLevel, isRecent: true)),
+          );
+          // Still expanded in full form
+          expect(find.text(r'$ '), findsOneWidget);
+          expect(find.text('✓ Done'), findsOneWidget);
+
+          // When updated to isRecent: false (e.g. next turn starts), it collapses
+          await tester.pumpWidget(
+            _wrap(const ToolRequestCard(tool: done, verbosity: SessionVerbosity.defaultLevel, isRecent: false)),
+          );
+          await tester.pump();
+          expect(find.text(r'$ '), findsNothing);
+          expect(find.text('DONE'), findsOneWidget);
+
+          // Clicking the older collapsed tool expands it
+          await tester.tap(find.byType(ToolRequestCard));
+          await tester.pump();
+          expect(find.text(r'$ '), findsOneWidget);
+          expect(find.text('✓ Done'), findsOneWidget);
+
+          // Keeping not-recent on rebuild preserves user-expanded state
+          await tester.pumpWidget(
+            _wrap(const ToolRequestCard(tool: done, verbosity: SessionVerbosity.defaultLevel, isRecent: false)),
+          );
+          await tester.pump();
+          expect(find.text(r'$ '), findsOneWidget);
+
+          // Failed tool stays expanded even when not recent
+          const failed = ToolEvent(
+            id: 'tc2',
+            toolCallId: 'tc2',
+            tool: 'Bash',
+            args: {'command': 'cargo check'},
+            status: ToolEventStatus.failed,
+            error: 'build error',
+          );
+          await tester.pumpWidget(
+            _wrap(const ToolRequestCard(tool: failed, verbosity: SessionVerbosity.defaultLevel, isRecent: false)),
+          );
+          expect(find.text(r'$ '), findsOneWidget);
+          expect(find.text('FAILED'), findsOneWidget);
+          expect(find.text('✗ build error'), findsOneWidget);
+        },
+      );
+
+      testWidgets(
+        'default mode: twiddling expansion keeps user state when moving between recent and not-recent',
+        (tester) async {
+          const done = ToolEvent(
+            id: 'tc1',
+            toolCallId: 'tc1',
+            tool: 'Bash',
+            args: {'command': 'cargo check'},
+            status: ToolEventStatus.completed,
+          );
+
+          // 1. Tool is recent: expanded by default
+          await tester.pumpWidget(
+            _wrap(const ToolRequestCard(tool: done, verbosity: SessionVerbosity.defaultLevel, isRecent: true)),
+          );
+          expect(find.text(r'$ '), findsOneWidget);
+
+          // User twiddles it to collapse while still recent
+          await tester.tap(find.byIcon(LucideIcons.chevronDown));
+          await tester.pump();
+          expect(find.text(r'$ '), findsNothing);
+
+          // Moves to not-recent: should preserve collapsed state left by user
+          await tester.pumpWidget(
+            _wrap(const ToolRequestCard(tool: done, verbosity: SessionVerbosity.defaultLevel, isRecent: false)),
+          );
+          await tester.pump();
+          expect(find.text(r'$ '), findsNothing);
+
+          // User explicitly expands it while not-recent
+          await tester.tap(find.byType(ToolRequestCard));
+          await tester.pump();
+          expect(find.text(r'$ '), findsOneWidget);
+
+          // Further rebuilds at not-recent preserve user-expanded state
+          await tester.pumpWidget(
+            _wrap(const ToolRequestCard(tool: done, verbosity: SessionVerbosity.defaultLevel, isRecent: false)),
+          );
+          await tester.pump();
+          expect(find.text(r'$ '), findsOneWidget);
+
+          // Switching global verbosity resets user twiddle to the new mode's default (terse -> collapsed)
+          await tester.pumpWidget(
+            _wrap(const ToolRequestCard(tool: done, verbosity: SessionVerbosity.terse, isRecent: false)),
+          );
+          await tester.pump();
+          expect(find.text(r'$ '), findsNothing);
+        },
+      );
+
+      testWidgets('verbose mode: all tool calls are left expanded unless collapsed widget is clicked', (
+        tester,
+      ) async {
+        const done = ToolEvent(
+          id: 'tc1',
+          toolCallId: 'tc1',
+          tool: 'Bash',
+          args: {'command': 'ls'},
+          status: ToolEventStatus.completed,
+        );
+        await tester.pumpWidget(
+          _wrap(const ToolRequestCard(tool: done, verbosity: SessionVerbosity.verbose)),
+        );
+        // Left expanded
+        expect(find.text(r'$ '), findsOneWidget);
+        expect(find.text('✓ Done'), findsOneWidget);
+
+        // Click header/collapse widget to collapse
+        await tester.tap(find.byIcon(LucideIcons.chevronDown));
+        await tester.pump();
+
+        // Now collapsed
+        expect(find.text(r'$ '), findsNothing);
+        expect(find.text('DONE'), findsOneWidget);
+      });
     });
   });
 }

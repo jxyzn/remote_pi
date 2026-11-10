@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="A new Flutter project.">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="app">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>app</title>
+  <link rel="manifest" href="manifest.json">
+
+  <!-- Polyfill / fallback for clipboard on insecure (HTTP) origins & desktop browsers -->
+  <script>
+    (function() {
+      // Prevent browser native Ctrl+F / Cmd+F find dialog from opening
+      // so Flutter's in-app chat search can handle it without empty browser popup.
+      window.addEventListener('keydown', function(e) {
+        if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')) {
+          e.preventDefault();
+        }
+      });
+
+      var _lastCopiedText = "";
+
+      function fallbackCopyText(text) {
+        _lastCopiedText = text;
+        var textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-9999px";
+        textArea.style.top = "-9999px";
+        textArea.style.opacity = "0";
+        textArea.setAttribute("readonly", "");
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        var ok = false;
+        try {
+          ok = document.execCommand('copy');
+        } catch (e) {
+          console.warn("execCommand copy failed:", e);
+        }
+        document.body.removeChild(textArea);
+        return ok ? Promise.resolve() : Promise.reject(new Error('Copy failed'));
+      }
+
+      document.addEventListener('copy', function(e) {
+        if (_lastCopiedText) {
+          try {
+            if (e.clipboardData) {
+              e.clipboardData.setData('text/plain', _lastCopiedText);
+            }
+          } catch (_) {}
+        }
+      });
+
+      if (!navigator.clipboard) {
+        try {
+          Object.defineProperty(navigator, 'clipboard', {
+            value: {
+              writeText: function(text) {
+                return fallbackCopyText(text);
+              },
+              readText: function() {
+                return Promise.reject(new Error('readText not supported in insecure context'));
+              }
+            },
+            configurable: true
+          });
+        } catch (e) {
+          navigator.clipboard = {
+            writeText: function(text) {
+              return fallbackCopyText(text);
+            },
+            readText: function() {
+              return Promise.reject(new Error('readText not supported in insecure context'));
+            }
+          };
+        }
+      } else {
+        var origWriteText = navigator.clipboard.writeText.bind(navigator.clipboard);
+        navigator.clipboard.writeText = function(text) {
+          _lastCopiedText = text;
+          return origWriteText(text).catch(function(err) {
+            console.warn("navigator.clipboard.writeText failed, using fallback:", err);
+            return fallbackCopyText(text);
+          });
+        };
+      }
+    })();
+  </script>
+</head>
+<body>
+  <!--
+    You can customize the "flutter_bootstrap.js" script.
+    This is useful to provide a custom configuration to the Flutter loader
+    or to give the user feedback during the initialization process.
+
+    For more details:
+    * https://docs.flutter.dev/platform-integration/web/initialization
+  -->
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>

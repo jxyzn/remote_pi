@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
+
 import 'package:app/config/utils/injector.dart';
 import 'package:app/data/actions/actions_repository.dart';
 import 'package:app/data/mesh/mesh_client.dart';
@@ -27,6 +29,7 @@ import 'package:app/pairing/owner_identity_bridge.dart';
 import 'package:app/pairing/pair_request_flow.dart';
 import 'package:app/pairing/qr_scanner.dart';
 import 'package:app/pairing/storage.dart';
+import 'package:app/pairing/web_owner_identity_store.dart';
 import 'package:app/routing/adaptive.dart';
 import 'package:app/ui/chat/attachment/viewmodels/attachment_viewmodel.dart';
 import 'package:app/ui/chat/quick_actions/viewmodels/quick_actions_viewmodel.dart';
@@ -63,7 +66,10 @@ Future<void> setupDependencies() async {
   // Plan 23 — Owner-key sync. The store talks to the native plugin
   // (iCloud Keychain on iOS, Block Store on Android); the bridge sits
   // between it and the rest of the app, owning boot + watch-for-reset.
-  final OwnerIdentityStore ownerStore = MethodChannelOwnerIdentityStore();
+  // On Web, localStorage via FlutterSecureStorage backs the store.
+  final OwnerIdentityStore ownerStore = kIsWeb
+      ? WebOwnerIdentityStore()
+      : MethodChannelOwnerIdentityStore();
   _injector.addInstance<OwnerIdentityStore>(ownerStore);
   final ownerBridge = OwnerIdentityBridge(
     ownerStore,
@@ -204,7 +210,7 @@ Future<void> setupDependencies() async {
       _injector.get<DismissedUpdateStore>(),
       _injector.get<UrlOpener>(),
       currentVersion: appVersion,
-      enabled: Platform.isAndroid,
+      enabled: !kIsWeb && Platform.isAndroid,
     ),
   );
 

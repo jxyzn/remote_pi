@@ -65,11 +65,28 @@ class ResponsiveCenter extends StatelessWidget {
 /// single→split no caso comum de já existirem sessões no boot.
 class ShellLayout extends ChangeNotifier {
   bool _zeroState = false;
+  bool _sidebarCollapsed = false;
+
   bool get isZeroState => _zeroState;
+  bool get isSidebarCollapsed => _sidebarCollapsed;
 
   void setZeroState(bool value) {
     if (value == _zeroState) return;
     _zeroState = value;
+    if (value) {
+      _sidebarCollapsed = false;
+    }
+    notifyListeners();
+  }
+
+  void setSidebarCollapsed(bool value) {
+    if (value == _sidebarCollapsed) return;
+    _sidebarCollapsed = value;
+    notifyListeners();
+  }
+
+  void toggleSidebar() {
+    _sidebarCollapsed = !_sidebarCollapsed;
     notifyListeners();
   }
 }
@@ -82,12 +99,21 @@ class ShellLayout extends ChangeNotifier {
 /// chat apareça pré-selecionado — o placeholder é mostrado até o primeiro
 /// toque. Vive enquanto o app roda (não é restaurada entre execuções, já
 /// que queremos iniciar sempre sem seleção).
-class SessionSelection extends ChangeNotifier {
-  ({String epk, String roomId, String title, String device, bool online})?
-  _current;
+typedef CurrentSessionSelection = ({
+  String epk,
+  String roomId,
+  String title,
+  String device,
+  bool online,
+  String? model,
+});
 
-  ({String epk, String roomId, String title, String device, bool online})?
-  get current => _current;
+/// Holds the currently selected session on wide layouts. Updated on tile tap
+/// and consumed by [_DetailPane].
+class SessionSelection extends ChangeNotifier {
+  CurrentSessionSelection? _current;
+
+  CurrentSessionSelection? get current => _current;
 
   /// `true` se `(epk, roomId)` é a sessão selecionada agora.
   bool matches(String epk, String roomId) {
@@ -108,9 +134,16 @@ class SessionSelection extends ChangeNotifier {
     String title, [
     String device = '',
     bool online = false,
+    String? model,
   ]) {
     final c = _current;
-    if (c != null && c.epk == epk && c.roomId == roomId) {
+    if (c != null &&
+        c.epk == epk &&
+        c.roomId == roomId &&
+        c.model == model &&
+        c.device == device &&
+        c.online == online &&
+        c.title == title) {
       return; // no-op — evita rebuild do detail/master
     }
     _current = (
@@ -119,6 +152,7 @@ class SessionSelection extends ChangeNotifier {
       title: title,
       device: device,
       online: online,
+      model: model,
     );
     notifyListeners();
   }

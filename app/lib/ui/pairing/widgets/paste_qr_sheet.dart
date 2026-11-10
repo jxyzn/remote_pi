@@ -109,10 +109,11 @@ class _PasteQrSheetBodyState extends State<_PasteQrSheetBody> {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final typo = context.typo;
     return SafeArea(
       top: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -131,25 +132,15 @@ class _PasteQrSheetBodyState extends State<_PasteQrSheetBody> {
             ),
             Text(
               'Paste pairing code',
-              style: TextStyle(
-                fontFamily: kMonoFamily,
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: colors.text,
-              ),
+              style: typo.display.copyWith(fontSize: 16),
             ),
             const SizedBox(height: 6),
             Text(
-              "Can't scan the QR? Paste the text from your Mac terminal "
+              "Can't scan the QR? Paste the text from your terminal "
               "below. It starts with remotepi://pair?…",
-              style: TextStyle(
-                fontFamily: kMonoFamily,
-                fontSize: 11,
-                color: colors.muted,
-                height: 1.4,
-              ),
+              style: typo.sansSmall.copyWith(color: colors.muted2),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 12),
             TextField(
               controller: _controller,
               minLines: 3,
@@ -158,31 +149,26 @@ class _PasteQrSheetBodyState extends State<_PasteQrSheetBody> {
               enableSuggestions: false,
               textCapitalization: TextCapitalization.none,
               keyboardType: TextInputType.url,
-              style: TextStyle(
-                fontFamily: kMonoFamily,
+              style: typo.mono.copyWith(
                 fontSize: 12,
                 color: colors.text,
               ),
               decoration: InputDecoration(
                 isDense: true,
                 hintText: 'remotepi://pair?t=…',
-                hintStyle:
-                    TextStyle(fontFamily: kMonoFamily, color: colors.muted),
+                hintStyle: typo.mono.copyWith(
+                  fontSize: 12,
+                  color: colors.muted,
+                ),
                 filled: true,
-                fillColor: colors.surface,
+                fillColor: colors.codeBg,
                 contentPadding: const EdgeInsets.symmetric(
                   horizontal: 12,
-                  vertical: 12,
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: colors.border),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: colors.accent),
+                  vertical: 10,
                 ),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             Row(
               children: [
                 Expanded(
@@ -195,43 +181,20 @@ class _PasteQrSheetBodyState extends State<_PasteQrSheetBody> {
                     ),
                     label: Text(
                       'Paste from clipboard',
-                      style: TextStyle(
-                        fontFamily: kMonoFamily,
-                        fontSize: 12,
+                      style: typo.sansBody.copyWith(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
                         color: colors.accent,
-                      ),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: colors.border),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: const RoundedRectangleBorder(
-                        borderRadius: BorderRadius.all(Radius.circular(6)),
                       ),
                     ),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             FilledButton(
               onPressed: _canSubmit ? _submit : null,
-              style: FilledButton.styleFrom(
-                backgroundColor: colors.accent,
-                foregroundColor: colors.onAccent,
-                disabledBackgroundColor: colors.border,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: const RoundedRectangleBorder(
-                  borderRadius: BorderRadius.all(Radius.circular(6)),
-                ),
-              ),
-              child: const Text(
-                'Pair',
-                style: TextStyle(
-                  fontFamily: kMonoFamily,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+              child: const Text('Pair'),
             ),
           ],
         ),

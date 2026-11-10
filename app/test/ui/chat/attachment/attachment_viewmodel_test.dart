@@ -32,6 +32,15 @@ class _FakePicker implements IImagePickerService {
     if (fail) throw Exception('boom');
     return next;
   }
+
+  @override
+  Future<PickedImage?> processImageBytes(
+    Uint8List rawBytes, [
+    String? mime,
+  ]) async {
+    if (fail) throw Exception('boom');
+    return next ?? PickedImage(bytes: rawBytes, mime: mime ?? 'image/jpeg');
+  }
 }
 
 class _FakeActions implements IActionsRepository {
@@ -176,6 +185,57 @@ void main() {
     await Future<void>.delayed(Duration.zero);
 
     expect(vm.state.visionSupported, isFalse);
+    vm.dispose();
+  });
+
+  test('attachFromBytes attaches image and emits pickFailed hint on error', () async {
+    final picker = _FakePicker()..next = null;
+    final vm = AttachmentViewModel(picker, _FakeActions());
+    final hints = <AttachHint>[];
+    final sub = vm.hints.listen(hints.add);
+
+    await vm.attachFromBytes(Uint8List.fromList([7, 8, 9]), 'image/png');
+    expect(vm.state, isA<AttachmentAttached>());
+    expect((vm.state as AttachmentAttached).image.mime, 'image/png');
+
+    vm.removeImage();
+    picker.fail = true;
+    await vm.attachFromBytes(Uint8List.fromList([7, 8, 9]), 'image/png');
+    await Future<void>.delayed(Duration.zero);
+    expect(vm.state, isA<AttachmentEmpty>());
+    expect(hints, [AttachHint.pickFailed]);
+
+    await sub.cancel();
+    vm.dispose();
+  });
+
+  test('resolves vision=true from base model id when current has :effort suffix', () async {
+    final actions = _FakeActions()
+      ..catalogue = ModelsCatalogue(
+        models: [
+          const WireModel(
+            id: 'gemma-4-26b',
+            name: 'gemma-4-26b',
+            provider: 'local',
+            reasoning: true,
+            contextWindow: 65536,
+            vision: true,
+          ),
+        ],
+        current: const WireModel(
+          id: 'gemma-4-26b:medium',
+          name: 'gemma-4-26b:medium',
+          provider: 'local',
+          reasoning: true,
+          contextWindow: 65536,
+          vision: false,
+        ),
+      );
+    final vm = AttachmentViewModel(_FakePicker(), actions);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(vm.state.visionSupported, isTrue);
+    expect(vm.state.attachBlockedByVision, isFalse);
     vm.dispose();
   });
 }

@@ -55,11 +55,15 @@ class WsTransport implements PeerTransport, IControlLink {
     // protocol-level Ping/Pong handled by ConnectionManager covers
     // app↔Pi liveness; this one covers app↔relay TCP liveness.
     // Accept http(s) URLs in the user-facing form but always speak
-    // ws(s) on the wire — IOWebSocketChannel rejects http schemes.
-    final WebSocketChannel ws = IOWebSocketChannel.connect(
-      Uri.parse(toWsRelayUrl(relayUrl)),
-      pingInterval: const Duration(seconds: 20),
-    );
+    // ws(s) on the wire.
+    final uri = Uri.parse(toWsRelayUrl(relayUrl));
+    final WebSocketChannel ws = kIsWeb
+        ? WebSocketChannel.connect(uri)
+        : IOWebSocketChannel.connect(
+            uri,
+            pingInterval: const Duration(seconds: 20),
+          );
+    unawaited(ws.ready.catchError((Object _) {}));
     final transport = WsTransport._(ws);
 
     final challengeCompleter = Completer<Map<String, dynamic>>();

@@ -416,6 +416,13 @@ class ConnectionManager extends Service {
     _retryAttempt = 0;
     _missedPings = 0;
     _activePeer = peer;
+    final boundRoom = peer.roomId ?? 'main';
+    _activeRoomId = boundRoom;
+    _propagateActiveRoom(boundRoom, channel);
+    final stdEpk = toStandardB64(peer.remoteEpk);
+    if (!_subscribedEpks.contains(stdEpk)) {
+      _subscribedEpks = [..._subscribedEpks, stdEpk];
+    }
     _emit(StatusOnline(channel));
     _startPing(peer, channel);
     _watchChannel(peer, channel);

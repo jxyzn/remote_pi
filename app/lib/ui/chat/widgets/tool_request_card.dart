@@ -2,35 +2,101 @@ import 'package:app/domain/session_state.dart';
 import 'package:app/protocol/protocol.dart';
 import 'package:app/ui/core/themes/themes.dart';
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 // Inline tool execution card that appears in the chat flow.
 //
-// Historically this widget rendered Allow/Deny buttons + a 60s countdown
-// assuming the Pi paused execution until the user decided. With the current
-// Claude SDK integration the pi-extension emits `tool_request` AFTER the
-// SDK has already accepted the tool (`tool_execution_start` fires post
-// auto-approval), so the buttons could only blink for a few hundred
-// milliseconds before `tool_result` arrived — confusing UX with no real
-// gating. The card is now purely informational.
+// Supports three session verbosity levels:
+// - terse: all tool calls initially collapsed into a single line; tap to expand.
+// - default: active tool call is expanded, auto-collapses on success, stays open on failure.
+// - verbose: all tool calls are left expanded unless their collapsed widget is clicked.
 //
 // `onDecide` is kept on the API for forward compat — when the Pi adds a
 // real approval pause we can re-enable the controls. Today it is unused.
 
-class ToolRequestCard extends StatelessWidget {
+class ToolRequestCard extends StatefulWidget {
   final ToolEvent tool;
+  final SessionVerbosity verbosity;
+  final bool isRecent;
   final void Function(String toolCallId, ApproveDecision decision)? onDecide;
 
-  const ToolRequestCard({super.key, required this.tool, this.onDecide});
+  const ToolRequestCard({
+    super.key,
+    required this.tool,
+    this.verbosity = SessionVerbosity.defaultLevel,
+    this.isRecent = true,
+    this.onDecide,
+  });
+
+  @override
+  State<ToolRequestCard> createState() => _ToolRequestCardState();
+}
+
+class _ToolRequestCardState extends State<ToolRequestCard> {
+  bool? _userExpanded;
+
+  static bool defaultExpanded(
+    ToolEventStatus status,
+    SessionVerbosity verbosity, {
+    bool isRecent = true,
+  }) {
+    return switch (verbosity) {
+      SessionVerbosity.terse => false,
+      SessionVerbosity.verbose => true,
+      SessionVerbosity.defaultLevel => switch (status) {
+        ToolEventStatus.pending || ToolEventStatus.allowed => true,
+        ToolEventStatus.completed => isRecent,
+        ToolEventStatus.failed ||
+        ToolEventStatus.denied ||
+        ToolEventStatus.expired => true,
+      },
+    };
+  }
+
+  bool get _isExpanded =>
+      _userExpanded ??
+      defaultExpanded(
+        widget.tool.status,
+        widget.verbosity,
+        isRecent: widget.isRecent,
+      );
+
+  @override
+  void didUpdateWidget(covariant ToolRequestCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // If the global verbosity setting changed or this card was rebound to
+    // a different tool ID, reset any manual user twiddle to follow the new mode.
+    if (oldWidget.verbosity != widget.verbosity ||
+        oldWidget.tool.id != widget.tool.id) {
+      _userExpanded = null;
+    }
+  }
+
+  void _toggleExpanded() {
+    setState(() {
+      _userExpanded = !_isExpanded;
+    });
+  }
 
   /// Plan/32 — one color drives the whole card so the outcome is unmistakable:
   /// running → blue, done → green, failed → red, denied/expired → grey.
   Color _statusColor(BuildContext context) {
     final colors = context.colors;
-    return switch (tool.status) {
+    return switch (widget.tool.status) {
       ToolEventStatus.pending || ToolEventStatus.allowed => colors.accent,
       ToolEventStatus.completed => colors.success,
       ToolEventStatus.failed => colors.error,
       ToolEventStatus.denied || ToolEventStatus.expired => colors.muted,
+    };
+  }
+
+  String _statusLabel() {
+    return switch (widget.tool.status) {
+      ToolEventStatus.pending || ToolEventStatus.allowed => 'RUNNING',
+      ToolEventStatus.completed => 'DONE',
+      ToolEventStatus.failed => 'FAILED',
+      ToolEventStatus.denied => 'DENIED',
+      ToolEventStatus.expired => 'EXPIRED',
     };
   }
 
@@ -40,76 +106,160 @@ class ToolRequestCard extends StatelessWidget {
     // Dim only the inert states (denied/expired); keep done/failed at full
     // opacity so their green/red read clearly.
     final dimmed =
-        tool.status == ToolEventStatus.denied ||
-        tool.status == ToolEventStatus.expired;
+        widget.tool.status == ToolEventStatus.denied ||
+        widget.tool.status == ToolEventStatus.expired;
+    final expanded = _isExpanded;
 
     return Opacity(
       opacity: dimmed ? 0.65 : 1.0,
       child: Container(
         decoration: BoxDecoration(
           color: context.colors.surface,
-          border: Border.all(color: color, width: 1),
-          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color, width: 1.5),
+          borderRadius: BorderRadius.circular(8),
           boxShadow: [
             BoxShadow(
-              color: color.withValues(alpha: 0.13),
-              blurRadius: 20,
-              spreadRadius: 1,
+              color: color.withValues(alpha: 0.32),
+              offset: const Offset(2, 2),
+              blurRadius: 0,
             ),
           ],
         ),
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildHeader(context, color),
-            const SizedBox(height: 10),
-            _buildCodeBlock(context),
-            const SizedBox(height: 8),
-            _buildOutcome(color),
-          ],
+        padding: EdgeInsets.symmetric(
+          horizontal: 10,
+          vertical: expanded ? 8 : 6,
         ),
+        child: expanded
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildHeader(context, color),
+                  const SizedBox(height: 6),
+                  _buildCodeBlock(context),
+                  const SizedBox(height: 6),
+                  _buildOutcome(color),
+                ],
+              )
+            : _buildCollapsed(context, color),
+      ),
+    );
+  }
+
+  Widget _buildCollapsed(BuildContext context, Color color) {
+    final typo = context.typo;
+    final colors = context.colors;
+    final summary = _formatOneLineSummary(widget.tool.tool, widget.tool.args);
+    final statusLabel = _statusLabel();
+
+    return InkWell(
+      onTap: _toggleExpanded,
+      borderRadius: BorderRadius.circular(6),
+      child: Row(
+        children: [
+          CustomPaint(
+            size: const Size(14, 14),
+            painter: _TerminalIconPainter(color: color),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            widget.tool.tool.toUpperCase(),
+            style: typo.badge.copyWith(
+              fontSize: 11,
+              color: color,
+              letterSpacing: 0.6,
+            ),
+          ),
+          if (summary.isNotEmpty) ...[
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                summary,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: typo.monoSmall.copyWith(
+                  color: colors.muted2,
+                  fontSize: 11,
+                ),
+              ),
+            ),
+          ] else
+            const Spacer(),
+          const SizedBox(width: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: color.withValues(alpha: 0.45)),
+            ),
+            child: Text(
+              statusLabel,
+              style: typo.badge.copyWith(
+                fontSize: 9.5,
+                color: color,
+                letterSpacing: 0.4,
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Icon(
+            LucideIcons.chevronRight,
+            size: 14,
+            color: color.withValues(alpha: 0.7),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildHeader(BuildContext context, Color color) {
-    final statusLabel = switch (tool.status) {
-      ToolEventStatus.pending || ToolEventStatus.allowed => 'RUNNING',
-      ToolEventStatus.completed => 'DONE',
-      ToolEventStatus.failed => 'FAILED',
-      ToolEventStatus.denied => 'DENIED',
-      ToolEventStatus.expired => 'EXPIRED',
-    };
+    final typo = context.typo;
+    final statusLabel = _statusLabel();
 
-    return Row(
-      children: [
-        CustomPaint(
-          size: const Size(14, 14),
-          painter: _TerminalIconPainter(color: color),
-        ),
-        const SizedBox(width: 8),
-        Text(
-          tool.tool.toUpperCase(),
-          style: TextStyle(
-            fontFamily: kMonoFamily,
-            fontSize: 11.5,
-            color: color,
-            letterSpacing: 0.6,
+    return InkWell(
+      onTap: _toggleExpanded,
+      borderRadius: BorderRadius.circular(6),
+      child: Row(
+        children: [
+          CustomPaint(
+            size: const Size(14, 14),
+            painter: _TerminalIconPainter(color: color),
           ),
-        ),
-        const Spacer(),
-        Text(
-          statusLabel,
-          style: TextStyle(
-            fontFamily: kMonoFamily,
-            fontSize: 10,
-            color: color,
-            letterSpacing: 0.4,
+          const SizedBox(width: 6),
+          Text(
+            widget.tool.tool.toUpperCase(),
+            style: typo.badge.copyWith(
+              fontSize: 11,
+              color: color,
+              letterSpacing: 0.6,
+            ),
           ),
-        ),
-      ],
+          const Spacer(),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: color.withValues(alpha: 0.45)),
+            ),
+            child: Text(
+              statusLabel,
+              style: typo.badge.copyWith(
+                fontSize: 9.5,
+                color: color,
+                letterSpacing: 0.4,
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Icon(
+            LucideIcons.chevronDown,
+            size: 14,
+            color: color.withValues(alpha: 0.7),
+          ),
+        ],
+      ),
     );
   }
 
@@ -120,15 +270,15 @@ class ToolRequestCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: colors.codeBg,
-        border: Border.all(color: colors.border),
-        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: colors.border, width: 1.2),
+        borderRadius: BorderRadius.circular(6),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(r'$ ', style: typo.mono.copyWith(color: colors.muted)),
-          Expanded(child: content),
+          Text(r'$ ', style: typo.mono.copyWith(color: colors.highlight)),
+          Expanded(child: SelectionArea(child: content)),
         ],
       ),
     );
@@ -137,9 +287,9 @@ class ToolRequestCard extends StatelessWidget {
   Widget _buildToolSummary(BuildContext context) {
     final colors = context.colors;
     final typo = context.typo;
-    final display = _formatToolDisplay(tool.tool, tool.args);
+    final display = _formatToolDisplay(widget.tool.tool, widget.tool.args);
     if (display == null) {
-      return Text(_formatArgs(tool.tool, tool.args), style: typo.mono);
+      return Text(_formatArgs(widget.tool.tool, widget.tool.args), style: typo.mono);
     }
 
     return Text.rich(
@@ -160,17 +310,36 @@ class ToolRequestCard extends StatelessWidget {
   }
 
   Widget _buildOutcome(Color color) {
-    final text = switch (tool.status) {
+    final text = switch (widget.tool.status) {
       ToolEventStatus.pending || ToolEventStatus.allowed => '⏳ Running…',
       ToolEventStatus.completed => '✓ Done',
-      ToolEventStatus.failed => '✗ ${tool.error ?? "Failed"}',
-      ToolEventStatus.denied => '✗ ${tool.error ?? "Denied"}',
+      ToolEventStatus.failed => '✗ ${widget.tool.error ?? "Failed"}',
+      ToolEventStatus.denied => '✗ ${widget.tool.error ?? "Denied"}',
       ToolEventStatus.expired => '✗ Expired',
     };
     return Text(
       text,
       style: TextStyle(fontFamily: kMonoFamily, fontSize: 12, color: color),
     );
+  }
+
+  static String _formatOneLineSummary(String tool, dynamic args) {
+    if (args == null) return '';
+    final normalizedTool = tool.toLowerCase();
+    if (args is Map) {
+      return switch (normalizedTool) {
+        'bash' =>
+          ((args['command'] as String?) ?? '').replaceAll('\n', ' ').trim(),
+        'edit' || 'write' =>
+          _stringArg(args, const ['file_path', 'path']),
+        _ => args.entries
+            .map((e) => '${e.key}=${e.value}')
+            .join(' ')
+            .replaceAll('\n', ' ')
+            .trim(),
+      };
+    }
+    return args.toString().replaceAll('\n', ' ').trim();
   }
 
   static String _formatArgs(String tool, dynamic args) {

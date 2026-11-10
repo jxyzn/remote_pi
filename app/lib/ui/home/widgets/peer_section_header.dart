@@ -12,22 +12,37 @@ class PeerSectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final typo = context.typo;
     final label = (peer.nickname?.isNotEmpty ?? false)
         ? peer.nickname!
         : peer.sessionName.isNotEmpty
             ? peer.sessionName
             : peer.remoteEpk.substring(0, 8);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 6),
-      child: Text(
-        label.toUpperCase(),
-        style: TextStyle(
-          fontFamily: kMonoFamily,
-          fontSize: 11,
-          color: colors.muted,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 1.0,
-        ),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+      child: Row(
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(
+              color: colors.highlight,
+              borderRadius: BorderRadius.circular(1.5),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              label.toUpperCase(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: typo.badge.copyWith(
+                color: colors.muted2,
+                letterSpacing: 0.8,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

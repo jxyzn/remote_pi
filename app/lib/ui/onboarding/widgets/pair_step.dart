@@ -75,96 +75,80 @@ class _PairStepState extends State<PairStep> {
     _lastObserved = state;
 
     final colors = context.colors;
+    final typo = context.typo;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
           Text(
             'Connect to your device',
-            style: TextStyle(
-              fontFamily: kMonoFamily,
-              fontSize: 16,
-              color: colors.text,
-              fontWeight: FontWeight.w600,
-            ),
+            style: typo.display.copyWith(fontSize: 18),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           Text(
-            'On your computer (Mac, Linux, or Windows), open Pi and run:',
-            style: TextStyle(
-                fontFamily: kMonoFamily, fontSize: 11, color: colors.muted),
+            'On your host machine, open Pi and run:',
+            style: typo.sansBody.copyWith(color: colors.muted2),
           ),
           const SizedBox(height: 6),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
             decoration: BoxDecoration(
-              color: colors.bg,
-              border: Border.all(color: colors.border),
-              borderRadius: const BorderRadius.all(Radius.circular(6)),
+              color: colors.codeBg,
+              border: Border.all(color: colors.border, width: 1.5),
+              borderRadius: const BorderRadius.all(Radius.circular(8)),
+              boxShadow: colors.retroShadowSm,
             ),
             child: Text(
               '/remote-pi pair',
-              style: TextStyle(
-                fontFamily: kMonoFamily,
+              style: typo.mono.copyWith(
                 fontSize: 13,
-                color: colors.accent,
+                fontWeight: FontWeight.w600,
+                color: colors.highlight,
               ),
             ),
           ),
           const SizedBox(height: 12),
           Text(
             'Scan the QR code that appears:',
-            style: TextStyle(
-                fontFamily: kMonoFamily, fontSize: 11, color: colors.muted),
+            style: typo.sansBody.copyWith(color: colors.muted2),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           Expanded(
             child: ClipRRect(
               borderRadius: const BorderRadius.all(Radius.circular(8)),
               child: _buildScannerBody(state, vm),
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           // Camera-less fallback: paste the QR payload as text.
           if (state is PairingScanning || state is PairingIdle)
             TextButton.icon(
               onPressed: () => _openPasteSheet(vm),
-              icon: Icon(LucideIcons.clipboardPaste,
-                  size: 16, color: colors.accent),
+              icon: Icon(
+                LucideIcons.clipboardPaste,
+                size: 16,
+                color: colors.accent,
+              ),
               label: Text(
                 "Can't scan? Paste code instead",
-                style: TextStyle(
-                  fontFamily: kMonoFamily,
-                  fontSize: 12,
+                style: typo.sansBody.copyWith(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
                   color: colors.accent,
                 ),
               ),
               style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 10),
+                padding: const EdgeInsets.symmetric(vertical: 8),
               ),
             ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Row(
             children: [
               OutlinedButton(
                 onPressed: widget.onBack,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: colors.muted,
-                  side: BorderSide(color: colors.border),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 12,
-                  ),
-                  shape: const RoundedRectangleBorder(
-                    borderRadius: BorderRadius.all(Radius.circular(6)),
-                  ),
-                ),
-                child: Text(
-                  'Back',
-                  style: TextStyle(fontFamily: kMonoFamily, fontSize: 13),
-                ),
+                child: const Text('Back'),
               ),
               const Spacer(),
               TextButton(
@@ -173,21 +157,20 @@ class _PairStepState extends State<PairStep> {
                   foregroundColor: colors.accent,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16,
-                    vertical: 12,
+                    vertical: 10,
                   ),
                 ),
                 child: Text(
                   'Scan later',
-                  style: TextStyle(
-                    fontFamily: kMonoFamily,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
+                  style: typo.sansTitle.copyWith(
+                    fontSize: 13.5,
+                    color: colors.accent,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
         ],
       ),
     );
@@ -255,8 +238,9 @@ class _StatusOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final typo = context.typo;
     return Container(
-      color: colors.bg,
+      color: colors.surface,
       child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -268,23 +252,14 @@ class _StatusOverlay extends StatelessWidget {
               child: Text(
                 message,
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                    fontFamily: kMonoFamily, fontSize: 12, color: colors.text),
+                style: typo.sansBody.copyWith(color: colors.text),
               ),
             ),
             if (actionLabel != null && onAction != null) ...[
               const SizedBox(height: 16),
               FilledButton(
                 onPressed: onAction,
-                style: FilledButton.styleFrom(
-                  backgroundColor: colors.accent,
-                  foregroundColor: colors.onAccent,
-                ),
-                child: Text(
-                  actionLabel!,
-                  style:
-                      TextStyle(fontFamily: kMonoFamily, fontSize: 12),
-                ),
+                child: Text(actionLabel!),
               ),
             ],
           ],

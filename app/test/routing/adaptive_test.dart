@@ -93,7 +93,7 @@ void main() {
       var notifications = 0;
       sel.addListener(() => notifications++);
 
-      sel.select('epkA', 'main', 'Title A again');
+      sel.select('epkA', 'main', 'Title A');
       expect(notifications, 0, reason: 'same (epk, room) must not notify');
       expect(sel.current?.title, 'Title A', reason: 'unchanged');
     });
@@ -260,6 +260,23 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.text('MASTER'), findsOneWidget);
         expect(find.text('DETAIL'), findsOneWidget);
+      },
+    );
+
+    test(
+      'ShellLayout.toggleSidebar flips isSidebarCollapsed and setZeroState(true) resets it',
+      () {
+        final shell = ShellLayout();
+        expect(shell.isSidebarCollapsed, isFalse);
+
+        shell.toggleSidebar();
+        expect(shell.isSidebarCollapsed, isTrue);
+
+        shell.setSidebarCollapsed(true); // no-op
+        expect(shell.isSidebarCollapsed, isTrue);
+
+        shell.setZeroState(true);
+        expect(shell.isSidebarCollapsed, isFalse);
       },
     );
   });

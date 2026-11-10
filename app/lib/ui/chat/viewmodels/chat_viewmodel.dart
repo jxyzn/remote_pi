@@ -77,10 +77,10 @@ class ChatViewModel extends ViewModel<ChatState> {
 
   // --- AppBar-facing getters (relay/connection queries, not message data) ---
 
-  PeerRecord? get activePeer => _activePeer;
+  PeerRecord? get activePeer => _activePeer ?? _conn.activePeer;
 
   RoomInfo? get activeRoom {
-    final epk = _activePeer?.remoteEpk;
+    final epk = activePeer?.remoteEpk;
     if (epk == null) return null;
     for (final r in _conn.roomsFor(epk)) {
       if (r.roomId == _activeRoomId) return r;
@@ -88,8 +88,11 @@ class ChatViewModel extends ViewModel<ChatState> {
     return null;
   }
 
+  /// Active model name reported by the Pi host for this room (or null when unknown).
+  String? get activeModel => activeRoom?.model;
+
   bool get isRoomLive {
-    final epk = _activePeer?.remoteEpk;
+    final epk = activePeer?.remoteEpk;
     if (epk == null) return false;
     return _conn.isRoomLive(epk, _activeRoomId);
   }

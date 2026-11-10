@@ -595,6 +595,16 @@ describe("state machine + pair_request flow", () => {
     expect(_getState()).toBe("paired");
     // No additional outbound messages from this second pair_request
     expect(relayRef.current!.send.mock.calls.length).toBe(sendsBefore);
+
+    // Re-pairing with a fresh QR token succeeds and replies pair_ok
+    relayRef.current!.emit("message", makeInnerLine(APP_PEER_ID, {
+      type: "pair_request", id: "req-3", token: "fresh-token", device_name: "Phone",
+    }));
+    await vi.waitFor(() => {
+      const sent = relayRef.current!.send.mock.calls.slice(sendsBefore)
+        .map((c) => c[0] as string).map(decodeSentCt);
+      expect(sent.some((d) => d.inner.type === "pair_ok" && d.inner.in_reply_to === "req-3")).toBe(true);
+    }, { timeout: 2000 });
   });
 
   test("known peer reconnect: any non-pair message from peers.json → paired", async () => {
@@ -1425,7 +1435,10 @@ describe("multi-channel broadcast (W2D)", () => {
     }));
     await new Promise<void>((r) => setImmediate(r));
 
-    expect(sendUserMessage).toHaveBeenCalledWith("after this", { deliverAs: "steer" });
+    expect(sendUserMessage).toHaveBeenCalledWith("after this", {
+      deliverAs: "steer",
+      expandPromptTemplates: true,
+    });
     expect(_getCurrentTurnIdForTest()).toBe("q-idle");
     const sent = relayRef.current!.send.mock.calls.slice(sendsBefore)
       .map((c) => c[0] as string).map(decodeSentCt);
@@ -1457,9 +1470,15 @@ describe("multi-channel broadcast (W2D)", () => {
     expect(sendUserMessage).not.toHaveBeenCalledWith("after A", undefined);
 
     harness.handler("agent_end")({ type: "agent_end" });
-    expect(sendUserMessage).not.toHaveBeenCalledWith("after A", { deliverAs: "steer" });
+    expect(sendUserMessage).not.toHaveBeenCalledWith("after A", {
+      deliverAs: "steer",
+      expandPromptTemplates: true,
+    });
     harness.handler("turn_end")({ type: "turn_end", turnIndex: 0, timestamp: 0 });
-    expect(sendUserMessage).toHaveBeenCalledWith("after A", { deliverAs: "steer" });
+    expect(sendUserMessage).toHaveBeenCalledWith("after A", {
+      deliverAs: "steer",
+      expandPromptTemplates: true,
+    });
     const statesA = relayRef.current!.send.mock.calls.slice(sendsBeforeA)
       .map((c) => c[0] as string).map(decodeSentCt)
       .filter((d) => d.inner.type === "queued_message_state");
@@ -1476,9 +1495,15 @@ describe("multi-channel broadcast (W2D)", () => {
     }));
     await new Promise<void>((r) => setImmediate(r));
     harness.handler("turn_end")({ type: "turn_end", turnIndex: 1, timestamp: 1 });
-    expect(sendUserMessage).not.toHaveBeenCalledWith("after B", { deliverAs: "steer" });
+    expect(sendUserMessage).not.toHaveBeenCalledWith("after B", {
+      deliverAs: "steer",
+      expandPromptTemplates: true,
+    });
     harness.handler("agent_end")({ type: "agent_end" });
-    expect(sendUserMessage).toHaveBeenCalledWith("after B", { deliverAs: "steer" });
+    expect(sendUserMessage).toHaveBeenCalledWith("after B", {
+      deliverAs: "steer",
+      expandPromptTemplates: true,
+    });
     const statesB = relayRef.current!.send.mock.calls.slice(sendsBeforeB)
       .map((c) => c[0] as string).map(decodeSentCt)
       .filter((d) => d.inner.type === "queued_message_state");
@@ -1885,7 +1910,10 @@ describe("multi-channel broadcast (W2D)", () => {
       })).toString("base64"),
     }));
     await new Promise<void>((r) => setImmediate(r));
-    expect(sendUserMessage).toHaveBeenCalledWith("hi", { deliverAs: "steer" });
+    expect(sendUserMessage).toHaveBeenCalledWith("hi", {
+      deliverAs: "steer",
+      expandPromptTemplates: true,
+    });
     const sent = relayRef.current!.send.mock.calls.slice(sendsBefore)
       .map((c) => c[0] as string).map(decodeSentCt);
     const echo = sent.find((d) => d.inner.type === "user_message");
@@ -1921,7 +1949,10 @@ describe("multi-channel broadcast (W2D)", () => {
       await new Promise<void>((r) => setImmediate(r));
 
       expect(sendUserMessage).toHaveBeenCalledTimes(1);
-      expect(sendUserMessage).toHaveBeenCalledWith("refine this", { deliverAs: "steer" });
+      expect(sendUserMessage).toHaveBeenCalledWith("refine this", {
+        deliverAs: "steer",
+        expandPromptTemplates: true,
+      });
       const sent = relayRef.current!.send.mock.calls.slice(sendsBefore)
         .map((c) => c[0] as string).map(decodeSentCt);
       const echo = sent.find((d) => d.inner.type === "user_message");
@@ -2081,7 +2112,10 @@ describe("multi-channel broadcast (W2D)", () => {
     await new Promise<void>((r) => setImmediate(r));
 
     expect(sendUserMessage).toHaveBeenCalledTimes(1);
-    expect(sendUserMessage).toHaveBeenCalledWith("refine while stale", { deliverAs: "steer" });
+    expect(sendUserMessage).toHaveBeenCalledWith("refine while stale", {
+      deliverAs: "steer",
+      expandPromptTemplates: true,
+    });
     expect(_getCurrentTurnIdForTest()).toBe("msg-stale-steer");
     const sent = relayRef.current!.send.mock.calls.slice(sendsBefore)
       .map((c) => c[0] as string).map(decodeSentCt);
@@ -2117,7 +2151,10 @@ describe("multi-channel broadcast (W2D)", () => {
     await new Promise<void>((r) => setImmediate(r));
 
     expect(sendUserMessage).toHaveBeenCalledTimes(1);
-    expect(sendUserMessage).toHaveBeenCalledWith("late correction", { deliverAs: "steer" });
+    expect(sendUserMessage).toHaveBeenCalledWith("late correction", {
+      deliverAs: "steer",
+      expandPromptTemplates: true,
+    });
     expect(_getCurrentTurnIdForTest()).toBe("msg-busy-no-mode");
     const sent = relayRef.current!.send.mock.calls.slice(sendsBefore)
       .map((c) => c[0] as string).map(decodeSentCt);
@@ -5965,5 +6002,19 @@ describe("model meta", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  test("user_message '/new' and '/compact' intercept as session actions without waking the LLM", async () => {
+    const sendUserMessage = vi.fn();
+    _setPiForTest({ sendUserMessage, sendMessage: () => undefined });
+    const sent: unknown[] = [];
+    const fakeSender = { send: (m: unknown) => sent.push(m) } as unknown as Parameters<typeof _routeClientMessageFrom>[0];
+
+    _routeClientMessageFrom(fakeSender, { type: "user_message", id: "cmd-new", text: " /new " }, { abort: () => undefined });
+    _routeClientMessageFrom(fakeSender, { type: "user_message", id: "cmd-compact", text: "/compact now" }, { abort: () => undefined });
+
+    expect(sendUserMessage).not.toHaveBeenCalled();
+    expect(sent).toContainEqual({ type: "cancelled", in_reply_to: "cmd-new", target_id: "cmd-new" });
+    expect(sent).toContainEqual({ type: "cancelled", in_reply_to: "cmd-compact", target_id: "cmd-compact" });
   });
 });

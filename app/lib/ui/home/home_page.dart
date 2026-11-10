@@ -72,7 +72,7 @@ class HomePage extends StatelessWidget {
   }
 
   // ---------------------------------------------------------------------------
-  // Large title (iOS-style)
+  // Compact retro console header bar
   // ---------------------------------------------------------------------------
 
   Widget _buildLargeTitleBar(
@@ -82,126 +82,92 @@ class HomePage extends StatelessWidget {
   ) {
     final colors = context.colors;
     final subtitle = _subtitleFor(context, vm, state);
-    const maxExpanded = 124.0;
     return SliverAppBar(
       backgroundColor: colors.bg,
-      surfaceTintColor: colors.bg,
+      surfaceTintColor: Colors.transparent,
       elevation: 0,
       scrolledUnderElevation: 0,
       pinned: true,
       stretch: false,
-      expandedHeight: maxExpanded,
-      collapsedHeight: 56,
-      toolbarHeight: 56,
+      expandedHeight: 54,
+      collapsedHeight: 54,
+      toolbarHeight: 54,
       automaticallyImplyLeading: false,
+      titleSpacing: 12,
+      title: Row(
+        children: [
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: colors.highlight,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: colors.border, width: 1.5),
+              boxShadow: colors.retroShadowSm,
+            ),
+            alignment: Alignment.center,
+            child: Icon(
+              LucideIcons.gamepad2,
+              size: 16,
+              color: colors.onAccent,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Flexible(
+            child: Text(
+              'Remote Pi',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: context.typo.display.copyWith(
+                fontSize: 17,
+                color: colors.text,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          subtitle,
+        ],
+      ),
       actions: [
         IconButton(
+          tooltip: 'Pair new Pi',
+          visualDensity: VisualDensity.compact,
+          icon: Icon(LucideIcons.scanQrCode, size: 19, color: colors.text),
+          onPressed: () => context.push('/pair'),
+        ),
+        IconButton(
           tooltip: 'Settings',
-          icon: Icon(LucideIcons.settings, color: colors.muted2),
-          // Tablet → bottom sheet (keeps the chat in context); phone →
-          // full-screen push. See openSettings.
+          visualDensity: VisualDensity.compact,
+          icon: Icon(LucideIcons.settings, size: 19, color: colors.text),
           onPressed: () => openSettings(context),
         ),
-        const SizedBox(width: 4),
+        if (isWideLayout(context))
+          IconButton(
+            tooltip: 'Collapse session list',
+            visualDensity: VisualDensity.compact,
+            icon: Icon(
+              LucideIcons.panelLeftClose,
+              size: 19,
+              color: colors.text,
+            ),
+            onPressed: () =>
+                context.read<ShellLayout>().setSidebarCollapsed(true),
+          ),
+        const SizedBox(width: 6),
       ],
-      // Title rendering happens entirely inside flexibleSpace so we
-      // can cross-fade between the large form (expanded) and the
-      // compact form (collapsed). Using `SliverAppBar.title` here
-      // would overlay the compact title on top of the large one
-      // while expanded — that was the "two app bars" bug.
-      flexibleSpace: LayoutBuilder(
-        builder: (ctx, constraints) {
-          final maxH = constraints.maxHeight;
-          const minH = 56.0;
-          // t=1 → fully expanded; t=0 → fully collapsed.
-          final t = ((maxH - minH) / (maxExpanded - minH)).clamp(0.0, 1.0);
-          return Stack(
-            fit: StackFit.expand,
-            children: [
-              Container(color: colors.bg),
-              // Large title block — fades OUT as we collapse.
-              Positioned(
-                left: 20,
-                right: 20,
-                bottom: 8,
-                child: IgnorePointer(
-                  ignoring: t < 0.05,
-                  child: Opacity(
-                    opacity: t,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Remote Pi',
-                          style: brandTextStyle(
-                            fontSize: 32,
-                            fontWeight: FontWeight.w700,
-                            color: colors.text,
-                            letterSpacing: -0.5,
-                            height: 1.05,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        subtitle,
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              // Compact title — fades IN as we collapse.
-              Positioned(
-                left: 20,
-                right: 64, // leave space for the actions icon
-                top: 0,
-                height: 56,
-                child: IgnorePointer(
-                  ignoring: t > 0.95,
-                  child: Opacity(
-                    opacity: 1 - t,
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        'Remote Pi',
-                        style: brandTextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: colors.text,
-                          letterSpacing: -0.2,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              // Bottom divider — only shows once collapsed.
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: Opacity(
-                  opacity: 1 - t,
-                  child: Divider(color: colors.border, height: 1, thickness: 1),
-                ),
-              ),
-            ],
-          );
-        },
+      bottom: PreferredSize(
+        preferredSize: const Size.fromHeight(1.5),
+        child: Container(height: 1.5, color: colors.border),
       ),
     );
   }
 
-  /// Subtitle line under "Remote Pi": ● Relay · [Connected|Awaiting pairing|Offline].
+  /// Inline status badge: ● Relay · [Connected|Awaiting pairing|Offline].
   /// Reflects the app→relay WS state (not per-Pi presence) so the
   /// user always knows whether the app itself is reachable.
-  ///
-  /// `HomeNoPeer` is the special case where no peer is paired yet —
-  /// the WS is never opened (its URL embeds the destination peer's
-  /// pubkey), so `isRelayConnected` is false but that doesn't mean
-  /// the relay is down. Render a neutral "Awaiting pairing" instead
-  /// of the alarming amber "Offline".
   Widget _subtitleFor(BuildContext context, HomeViewModel vm, HomeState state) {
     final colors = context.colors;
+    final typo = context.typo;
     final connected = vm.isRelayConnected;
     final awaitingPairing = state is HomeNoPeer;
     final Color dotColor;
@@ -210,7 +176,7 @@ class HomePage extends StatelessWidget {
     if (connected) {
       dotColor = colors.success;
       statusLabel = 'Connected';
-      statusColor = colors.muted;
+      statusColor = colors.muted2;
     } else if (awaitingPairing) {
       dotColor = colors.muted;
       statusLabel = 'Awaiting pairing';
@@ -220,42 +186,52 @@ class HomePage extends StatelessWidget {
       statusLabel = 'Offline';
       statusColor = colors.warning;
     }
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 7,
-          height: 7,
-          decoration: BoxDecoration(shape: BoxShape.circle, color: dotColor),
-        ),
-        const SizedBox(width: 8),
-        Text(
-          'Relay',
-          style: TextStyle(
-            fontFamily: kMonoFamily,
-            color: colors.text,
-            fontSize: 13,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: colors.border, width: 1.2),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 7,
+            height: 7,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(2),
+              color: dotColor,
+            ),
           ),
-        ),
-        const SizedBox(width: 6),
-        Text(
-          '·',
-          style: TextStyle(
-            fontFamily: kMonoFamily,
-            color: colors.muted,
-            fontSize: 13,
+          const SizedBox(width: 5),
+          Text(
+            'Relay',
+            style: typo.sansSmall.copyWith(
+              color: colors.text,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
           ),
-        ),
-        const SizedBox(width: 6),
-        Text(
-          statusLabel,
-          style: TextStyle(
-            fontFamily: kMonoFamily,
-            color: statusColor,
-            fontSize: 13,
+          const SizedBox(width: 4),
+          Text(
+            '·',
+            style: typo.sansSmall.copyWith(
+              color: colors.muted,
+              fontSize: 11,
+            ),
           ),
-        ),
-      ],
+          const SizedBox(width: 4),
+          Text(
+            statusLabel,
+            style: typo.sansSmall.copyWith(
+              color: statusColor,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -382,18 +358,20 @@ class HomePage extends StatelessWidget {
   }) {
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: context.colors.bg,
+      backgroundColor: context.colors.surface,
       builder: (sheetCtx) {
         final colors = sheetCtx.colors;
+        final typo = sheetCtx.typo;
         return SafeArea(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
+                dense: true,
                 leading: Icon(LucideIcons.pencil, color: colors.accent),
                 title: Text(
                   'Rename session',
-                  style: TextStyle(color: colors.text),
+                  style: typo.sansBody.copyWith(fontWeight: FontWeight.w600),
                 ),
                 onTap: () {
                   Navigator.of(sheetCtx).pop();
@@ -401,6 +379,7 @@ class HomePage extends StatelessWidget {
                 },
               ),
               ListTile(
+                dense: true,
                 leading: Icon(
                   LucideIcons.trash2,
                   color: isLive ? colors.muted : colors.error,
@@ -408,12 +387,15 @@ class HomePage extends StatelessWidget {
                 enabled: !isLive,
                 title: Text(
                   'Delete session (local only)',
-                  style: TextStyle(color: isLive ? colors.muted : colors.text),
+                  style: typo.sansBody.copyWith(
+                    color: isLive ? colors.muted : colors.text,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 subtitle: isLive
                     ? Text(
                         'Only available when the room is offline',
-                        style: TextStyle(color: colors.muted, fontSize: 11),
+                        style: typo.sansSmall.copyWith(color: colors.muted),
                       )
                     : null,
                 onTap: isLive
@@ -440,32 +422,33 @@ class HomePage extends StatelessWidget {
       context: context,
       builder: (dCtx) {
         final colors = dCtx.colors;
+        final typo = dCtx.typo;
         return AlertDialog(
-          backgroundColor: colors.bg,
-          title: Text('Rename session', style: TextStyle(color: colors.text)),
+          backgroundColor: colors.surface,
+          title: Text('Rename session', style: typo.sansTitle),
           content: TextField(
             controller: controller,
             autofocus: true,
-            style: TextStyle(color: colors.text, fontFamily: kMonoFamily),
+            style: typo.sansBody,
             decoration: InputDecoration(
               hintText: it.room.cwd ?? 'Session',
-              hintStyle: TextStyle(color: colors.muted),
-              enabledBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: colors.border),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: colors.accent),
-              ),
+              hintStyle: typo.sansBody.copyWith(color: colors.muted),
             ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dCtx).pop(null),
-              child: Text('Cancel', style: TextStyle(color: colors.muted)),
+              child: Text(
+                'Cancel',
+                style: typo.sansBody.copyWith(color: colors.muted2),
+              ),
             ),
             TextButton(
               onPressed: () => Navigator.of(dCtx).pop(controller.text.trim()),
-              child: Text('Save', style: TextStyle(color: colors.accent)),
+              child: Text(
+                'Save',
+                style: typo.sansTitle.copyWith(color: colors.accent),
+              ),
             ),
           ],
         );
@@ -484,22 +467,29 @@ class HomePage extends StatelessWidget {
       context: context,
       builder: (dCtx) {
         final colors = dCtx.colors;
+        final typo = dCtx.typo;
         return AlertDialog(
-          backgroundColor: colors.bg,
-          title: Text('Delete session?', style: TextStyle(color: colors.text)),
+          backgroundColor: colors.surface,
+          title: Text('Delete session?', style: typo.sansTitle),
           content: Text(
             'Removes locally only. If the session comes back online on '
             'the Pi, it reappears in the list.',
-            style: TextStyle(color: colors.muted, fontSize: 12),
+            style: typo.sansSmall.copyWith(color: colors.muted2),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dCtx).pop(false),
-              child: Text('Cancel', style: TextStyle(color: colors.muted)),
+              child: Text(
+                'Cancel',
+                style: typo.sansBody.copyWith(color: colors.muted2),
+              ),
             ),
             TextButton(
               onPressed: () => Navigator.of(dCtx).pop(true),
-              child: Text('Delete', style: TextStyle(color: colors.error)),
+              child: Text(
+                'Delete',
+                style: typo.sansTitle.copyWith(color: colors.error),
+              ),
             ),
           ],
         );
@@ -537,13 +527,19 @@ class HomePage extends StatelessWidget {
       title,
       device,
       online,
+      room.model,
     );
     // Phone: full-screen chat (root push → native back/swipe). Tablet:
     // the detail pane reacts to the selection above — no nav needed.
     if (!isWideLayout(context)) {
       context.push(
         '/chat',
-        extra: {'title': title, 'device': device, 'online': online},
+        extra: {
+          'title': title,
+          'device': device,
+          'online': online,
+          'model': room.model,
+        },
       );
     }
   }
@@ -586,40 +582,39 @@ class _LonelyEmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final typo = context.typo;
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: kMaxContentWidth),
-        child: Opacity(
-          opacity: 0.35,
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(LucideIcons.moon, color: colors.muted, size: 56),
-                const SizedBox(height: 18),
-                Text(
-                  'Nothing here…',
-                  style: TextStyle(
-                    fontFamily: kMonoFamily,
-                    color: colors.muted2,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                  ),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: colors.surface,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: colors.border, width: 1.5),
+                  boxShadow: colors.retroShadowSm,
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  'When a paired Pi opens a session, it shows up here.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontFamily: kMonoFamily,
-                    color: colors.muted,
-                    fontSize: 11,
-                    height: 1.4,
-                  ),
-                ),
-              ],
-            ),
+                alignment: Alignment.center,
+                child: Icon(LucideIcons.moon, color: colors.accent, size: 28),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                'Nothing here…',
+                style: typo.sansTitle.copyWith(color: colors.text),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'When a paired Pi opens a session, it shows up here.',
+                textAlign: TextAlign.center,
+                style: typo.sansSmall.copyWith(color: colors.muted2),
+              ),
+            ],
           ),
         ),
       ),
@@ -633,36 +628,62 @@ class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final typo = context.typo;
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: kMaxContentWidth),
         child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(LucideIcons.scanQrCode, color: colors.muted, size: 48),
-              const SizedBox(height: 16),
-              Text(
-                'No pairings yet',
-                style: TextStyle(color: colors.muted2, fontSize: 14),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Scan a QR from your Mac to start.',
-                style: TextStyle(color: colors.muted, fontSize: 12),
-              ),
-              const SizedBox(height: 24),
-              FilledButton.icon(
-                onPressed: () => context.push('/pair'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: colors.accent,
-                  foregroundColor: colors.onAccent,
+          padding: const EdgeInsets.all(24),
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: colors.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: colors.border, width: 2),
+              boxShadow: colors.retroShadow,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: colors.modelBadgeBg,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: colors.border, width: 1.5),
+                    boxShadow: colors.retroShadowSm,
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(
+                    LucideIcons.scanQrCode,
+                    color: colors.text,
+                    size: 26,
+                  ),
                 ),
-                icon: const Icon(LucideIcons.scanQrCode, size: 18),
-                label: const Text('Scan QR'),
-              ),
-            ],
+                const SizedBox(height: 14),
+                Text(
+                  'No pairings yet',
+                  style: typo.display.copyWith(fontSize: 16),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Scan a QR from your host to start.',
+                  textAlign: TextAlign.center,
+                  style: typo.sansBody.copyWith(color: colors.muted2),
+                ),
+                const SizedBox(height: 18),
+                FilledButton.icon(
+                  onPressed: () => context.push('/pair'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: colors.accent,
+                    foregroundColor: colors.onAccent,
+                  ),
+                  icon: const Icon(LucideIcons.scanQrCode, size: 18),
+                  label: const Text('Scan QR'),
+                ),
+              ],
+            ),
           ),
         ),
       ),

@@ -8,6 +8,22 @@
 sealed class ChatMessage {
   final String id;
   const ChatMessage({required this.id});
+
+  /// True when this message matches the case-insensitive search [query].
+  bool matchesSearchQuery(String query) {
+    final q = query.trim().toLowerCase();
+    if (q.isEmpty) return false;
+    return switch (this) {
+      UserMsg(:final text) => text.toLowerCase().contains(q),
+      AssistantMsg(:final text) => text.toLowerCase().contains(q),
+      ToolEvent(:final tool, :final args, :final result, :final error) =>
+        tool.toLowerCase().contains(q) ||
+        (args != null && args.toString().toLowerCase().contains(q)) ||
+        (result != null && result.toString().toLowerCase().contains(q)) ||
+        (error != null && error.toLowerCase().contains(q)),
+      CompactionMsg(:final summary) => summary.toLowerCase().contains(q),
+    };
+  }
 }
 
 /// Plan/24-fix-app-source-of-truth: every UserMsg is tagged with the
@@ -166,6 +182,30 @@ class ToolEvent extends ChatMessage {
 /// Plan/32 — `denied` = the user/SDK declined the tool; `failed` = the tool
 /// ran but errored (a distinct, red outcome). `expired` = approval timed out.
 enum ToolEventStatus { pending, allowed, denied, expired, completed, failed }
+
+/// Session verbosity level governing how tool calls are rendered in chat:
+/// - [terse]: all tool calls initially collapsed into a single line; user clicks to expand.
+/// - [defaultLevel]: active tool calls are expanded; automatically collapse to single line
+///   upon successful completion, or remain expanded on failure.
+/// - [verbose]: all tool calls are left expanded unless clicked to collapse.
+enum SessionVerbosity {
+  terse('terse', 'Terse', 'All tool calls initially collapsed into a single line.'),
+  defaultLevel('default', 'Default', 'Most recent tool call remains expanded; older completed tools collapse.'),
+  verbose('verbose', 'Verbose', 'All tool calls remain expanded.');
+
+  final String id;
+  final String label;
+  final String description;
+  const SessionVerbosity(this.id, this.label, this.description);
+
+  static SessionVerbosity fromString(String? raw) {
+    return switch (raw?.toLowerCase()) {
+      'terse' => SessionVerbosity.terse,
+      'verbose' => SessionVerbosity.verbose,
+      _ => SessionVerbosity.defaultLevel,
+    };
+  }
+}
 
 /// Plan/32 — a context-compaction marker rendered as a system bubble
 /// (distinct from user/assistant). [summary] is the Pi's recap of the

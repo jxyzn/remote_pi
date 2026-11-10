@@ -71,11 +71,32 @@ class _PairingPageState extends State<PairingPage> {
     }
 
     final colors = context.colors;
+    final typo = context.typo;
     return Scaffold(
       backgroundColor: colors.bg,
       appBar: AppBar(
         backgroundColor: colors.bg,
-        title: const Text('Pair device'),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Pair device'),
+            Text(
+              vm.currentRelayUrl.replaceFirst(RegExp(r'^https?://'), ''),
+              style: typo.monoSmall.copyWith(
+                fontSize: 10,
+                color: colors.muted2,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          IconButton(
+            icon: Icon(LucideIcons.settings, size: 18, color: colors.text),
+            tooltip: 'Relay settings',
+            onPressed: () => context.push('/settings'),
+          ),
+        ],
       ),
       body: _buildBody(state, vm),
     );
@@ -151,7 +172,7 @@ class _PairingPageState extends State<PairingPage> {
           child: Text(
             isConnecting
                 ? 'Connecting to $sessionName…'
-                : 'Point camera at the QR shown in your Mac terminal',
+                : 'Point camera at the QR shown in your terminal',
             textAlign: TextAlign.center,
             style: const TextStyle(color: Colors.white70, fontSize: 14),
           ),
@@ -262,31 +283,28 @@ class _ErrorView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final typo = context.typo;
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32),
+        padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               LucideIcons.circleAlert,
               color: colors.error,
-              size: 48,
+              size: 44,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
             Text(
               message,
               textAlign: TextAlign.center,
-              style: TextStyle(color: colors.muted2, fontSize: 14),
+              style: typo.sansBody.copyWith(color: colors.muted2),
             ),
             if (canRetry) ...[
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
               FilledButton(
                 onPressed: onRetry,
-                style: FilledButton.styleFrom(
-                  backgroundColor: colors.accent,
-                  foregroundColor: colors.onAccent,
-                ),
                 child: const Text('Try again'),
               ),
             ],

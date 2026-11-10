@@ -3,9 +3,10 @@ import 'dart:async';
 import 'package:app/protocol/protocol.dart';
 import 'package:app/ui/core/themes/themes.dart';
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
-/// Plan/57 — full-screen modal rendering an interactive `extension_ui_request`
-/// (ask_user via pi-ask).
+/// Inline interactive card rendering an `extension_ui_request` (ask_user via
+/// pi-ask) inside the chat list.
 ///
 /// Drives the rich `ask` envelope when present (single/multi/preview options +
 /// custom text per question), else falls back to the plain SDK method
@@ -219,45 +220,84 @@ class _ExtensionUiSheetState extends State<ExtensionUiSheet> {
     final title = widget.request.title ?? ask?.title ?? 'Clarification needed';
 
     // System back (Android) mirrors the close button: cancel the flow instead
-    // of popping the chat route underneath while the modal is still overlaid.
+    // of popping the chat route underneath while the prompt is active.
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop && !_submitting) _cancel();
       },
       child: Material(
-        color: colors.bg,
-        child: SafeArea(
-          child: Scaffold(
-            backgroundColor: colors.bg,
-            resizeToAvoidBottomInset: true,
-            appBar: AppBar(
-              backgroundColor: colors.bg,
-              elevation: 0,
-              scrolledUnderElevation: 0,
-              leading: IconButton(
-                icon: const Icon(Icons.close),
-                tooltip: 'Cancel',
-                onPressed: _submitting ? null : _cancel,
+        color: Colors.transparent,
+        child: Container(
+          decoration: BoxDecoration(
+            color: colors.surface,
+            border: Border.all(color: colors.accent, width: 1.5),
+            borderRadius: BorderRadius.circular(10),
+            boxShadow: [
+              BoxShadow(
+                color: colors.accent.withValues(alpha: 0.25),
+                offset: const Offset(2, 2),
+                blurRadius: 0,
               ),
-              title: Text(title),
-            ),
-            body: ask != null
-                ? _buildRich(context, ask)
-                : _buildDegraded(context),
-            bottomNavigationBar: _buildActions(context),
+            ],
+          ),
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildHeader(context, title),
+              const SizedBox(height: 12),
+              if (ask != null)
+                _buildRich(context, ask)
+              else
+                _buildDegraded(context),
+              const SizedBox(height: 12),
+              _buildActions(context),
+            ],
           ),
         ),
       ),
     );
   }
 
+  Widget _buildHeader(BuildContext context, String title) {
+    final colors = context.colors;
+    final typo = context.typo;
+    return Row(
+      children: [
+        Icon(LucideIcons.helpCircle, size: 16, color: colors.accent),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            title,
+            style: typo.sansTitle.copyWith(
+              fontSize: 14,
+              color: colors.text,
+            ),
+          ),
+        ),
+        IconButton(
+          icon: Icon(LucideIcons.x, size: 16, color: colors.muted),
+          tooltip: 'Cancel',
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+          onPressed: _submitting ? null : _cancel,
+        ),
+      ],
+    );
+  }
+
   Widget _buildRich(BuildContext context, AskEnrichmentWire ask) {
-    return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-      itemCount: ask.questions.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 24),
-      itemBuilder: (context, i) => _buildQuestion(context, ask.questions[i]),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < ask.questions.length; i++) ...[
+          if (i > 0) const SizedBox(height: 16),
+          _buildQuestion(context, ask.questions[i]),
+        ],
+      ],
     );
   }
 
@@ -417,108 +457,100 @@ class _ExtensionUiSheetState extends State<ExtensionUiSheet> {
   Widget _buildDegraded(BuildContext context) {
     final text = Theme.of(context).textTheme;
     final message = widget.request.message ?? widget.request.title ?? '';
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (message.isNotEmpty) ...[
-            Text(message, style: text.bodyLarge),
-            const SizedBox(height: 16),
-          ],
-          switch (widget.request.method) {
-            ExtensionUiMethod.select => RadioGroup<String>(
-              groupValue: _singleValue,
-              onChanged: (v) => setState(() => _singleValue = v),
-              child: Column(
-                children: [
-                  for (final opt in widget.request.options)
-                    RadioListTile<String>(
-                      value: opt,
-                      title: Text(opt),
-                      enabled: !_submitting,
-                    ),
-                ],
-              ),
-            ),
-            ExtensionUiMethod.input || ExtensionUiMethod.editor => TextField(
-              controller: _textController,
-              maxLines: 5,
-              enabled: !_submitting,
-              // _canSubmit reads this text; rebuild per keystroke or the
-              // Submit button never enables.
-              onChanged: (_) => setState(() {}),
-              decoration: InputDecoration(
-                hintText: widget.request.placeholder ?? '',
-                border: const OutlineInputBorder(),
-              ),
-            ),
-            ExtensionUiMethod.confirm => Text(
-              'Please confirm.',
-              style: text.titleMedium,
-            ),
-            // ChatViewModel consumes notify requests without opening this
-            // sheet. Keep the defensive enum branch empty; [message] above
-            // already renders it once if this path ever becomes reachable.
-            ExtensionUiMethod.notify => const SizedBox.shrink(),
-          },
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (message.isNotEmpty) ...[
+          Text(message, style: text.bodyLarge),
+          const SizedBox(height: 16),
         ],
-      ),
+        switch (widget.request.method) {
+          ExtensionUiMethod.select => RadioGroup<String>(
+            groupValue: _singleValue,
+            onChanged: (v) => setState(() => _singleValue = v),
+            child: Column(
+              children: [
+                for (final opt in widget.request.options)
+                  RadioListTile<String>(
+                    value: opt,
+                    title: Text(opt),
+                    enabled: !_submitting,
+                  ),
+              ],
+            ),
+          ),
+          ExtensionUiMethod.input || ExtensionUiMethod.editor => TextField(
+            controller: _textController,
+            maxLines: 5,
+            enabled: !_submitting,
+            // _canSubmit reads this text; rebuild per keystroke or the
+            // Submit button never enables.
+            onChanged: (_) => setState(() {}),
+            decoration: InputDecoration(
+              hintText: widget.request.placeholder ?? '',
+              border: const OutlineInputBorder(),
+            ),
+          ),
+          ExtensionUiMethod.confirm => Text(
+            'Please confirm.',
+            style: text.titleMedium,
+          ),
+          // ChatViewModel consumes notify requests without opening this
+          // sheet. Keep the defensive enum branch empty; [message] above
+          // already renders it once if this path ever becomes reachable.
+          ExtensionUiMethod.notify => const SizedBox.shrink(),
+        },
+      ],
     );
   }
 
   Widget _buildActions(BuildContext context) {
     final colors = context.colors;
     final showError = widget.error != null && widget.error!.isNotEmpty;
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (showError)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              widget.error!,
+              style: TextStyle(color: colors.error, fontSize: 13),
+            ),
+          )
+        else if (_awaitHint)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 8),
+            child: Text(
+              'No response from Pi yet — retry or cancel.',
+              style: TextStyle(fontSize: 13),
+            ),
+          ),
+        Row(
           children: [
-            if (showError)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Text(
-                  widget.error!,
-                  style: TextStyle(color: colors.error, fontSize: 13),
-                ),
-              )
-            else if (_awaitHint)
-              const Padding(
-                padding: EdgeInsets.only(bottom: 8),
-                child: Text(
-                  'No response from Pi yet — retry or cancel.',
-                  style: TextStyle(fontSize: 13),
-                ),
+            Expanded(
+              child: OutlinedButton(
+                onPressed: _submitting ? null : _cancel,
+                child: const Text('Cancel'),
               ),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: _submitting ? null : _cancel,
-                    child: const Text('Cancel'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: FilledButton(
-                    onPressed: (_canSubmit && !_submitting) ? _submit : null,
-                    child: _submitting
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Submit'),
-                  ),
-                ),
-              ],
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: FilledButton(
+                onPressed: (_canSubmit && !_submitting) ? _submit : null,
+                child: _submitting
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Submit'),
+              ),
             ),
           ],
         ),
-      ),
+      ],
     );
   }
 }

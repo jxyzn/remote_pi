@@ -94,3 +94,7 @@ graphify-out
 marketing/
 
 openspec
+
+# Android APK binaries
+*.apk
+

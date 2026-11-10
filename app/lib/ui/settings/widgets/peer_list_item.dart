@@ -38,6 +38,7 @@ class PeerListItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final typo = context.typo;
     final nickname = peer.nickname;
     final hasNickname = nickname != null && nickname.isNotEmpty;
 
@@ -47,18 +48,17 @@ class PeerListItem extends StatelessWidget {
       background: Container(
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.symmetric(horizontal: 20),
-        color: Colors.red.shade900,
-        child: const Row(
+        color: colors.error,
+        child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(LucideIcons.trash2, color: Colors.white, size: 18),
-            SizedBox(width: 6),
+            const Icon(LucideIcons.trash2, color: Colors.white, size: 18),
+            const SizedBox(width: 6),
             Text(
               'Revoke',
-              style: TextStyle(
+              style: typo.sansTitle.copyWith(
                 color: Colors.white,
                 fontSize: 13,
-                fontWeight: FontWeight.w600,
               ),
             ),
           ],
@@ -66,9 +66,9 @@ class PeerListItem extends StatelessWidget {
       ),
       confirmDismiss: (_) => onRevokeRequested(),
       child: Container(
-        padding: const EdgeInsets.fromLTRB(18, 14, 6, 14),
+        padding: const EdgeInsets.fromLTRB(16, 10, 6, 10),
         decoration: BoxDecoration(
-          color: colors.bg,
+          color: colors.surface,
           border: Border(bottom: BorderSide(color: colors.border)),
         ),
         child: Row(
@@ -79,39 +79,22 @@ class PeerListItem extends StatelessWidget {
                 children: [
                   Text(
                     hasNickname ? nickname : peer.sessionName,
-                    style: TextStyle(
-                      color: colors.text,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
+                    style: typo.sansTitle.copyWith(fontSize: 14),
                     overflow: TextOverflow.ellipsis,
                   ),
                   if (hasNickname) ...[
                     const SizedBox(height: 2),
                     Text(
                       peer.sessionName,
-                      style: TextStyle(
-                        color: colors.muted2,
-                        fontSize: 12,
-                      ),
+                      style: typo.sansSmall.copyWith(color: colors.muted2),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
-                  // Plan-17 follow-up — relay URL removed from the
-                  // tile (it's the same for every peer post-plan-14
-                  // global-relay refactor, so it added no signal).
-                  // If/when the protocol surfaces platform (Mac /
-                  // Linux / Windows / Pi OS), render it here; until
-                  // then this slot stays empty.
                   if (_platformLabel(peer) != null) ...[
                     const SizedBox(height: 4),
                     Text(
                       _platformLabel(peer)!,
-                      style: TextStyle(
-                        fontFamily: kMonoFamily,
-                        fontSize: 11,
-                        color: colors.muted,
-                      ),
+                      style: typo.monoSmall.copyWith(color: colors.muted),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
@@ -120,7 +103,8 @@ class PeerListItem extends StatelessWidget {
             ),
             IconButton(
               tooltip: 'Edit nickname',
-              icon: const Icon(LucideIcons.pencil, size: 18),
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(LucideIcons.pencil, size: 17),
               color: colors.muted2,
               onPressed: onEditNickname,
             ),

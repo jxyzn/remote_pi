@@ -59,7 +59,7 @@ void main() {
       ),
     );
     await tester.pump();
-    expect(find.byType(SelectableText), findsOneWidget);
+    expect(find.byType(SelectionArea), findsOneWidget);
     expect(find.text('my message'), findsOneWidget);
   });
 

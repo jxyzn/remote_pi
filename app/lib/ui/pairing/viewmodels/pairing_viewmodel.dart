@@ -1,5 +1,6 @@
 import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:app/data/preferences/preferences.dart';
 import 'package:app/data/transport/connection_manager.dart';
 import 'package:app/data/transport/peer_channel.dart';
@@ -80,7 +81,7 @@ class PairingViewModel extends ViewModel<PairingState> {
             onTimeout: () => throw const pair_flow.PairingError(
               code: 'pair_timeout',
               message:
-                  'Timed out — make sure /remote-pi is running on your Mac',
+                  'Timed out — make sure /remote-pi is running on your host',
             ),
           );
 
@@ -100,6 +101,9 @@ class PairingViewModel extends ViewModel<PairingState> {
       emit(PairingError(message: e.toString(), canRetry: true));
     }
   }
+
+  /// Effective relay URL used for pairing.
+  String get currentRelayUrl => resolveRelayUrl(_prefs);
 
   /// Retry after an error.
   void retry() => emit(const PairingScanning());
@@ -133,15 +137,16 @@ class PairingViewModel extends ViewModel<PairingState> {
   }
 
   static String _friendlyError(pair_flow.PairingError e) => switch (e.code) {
-    'token_expired' => 'QR expired — generate a new one on your Mac',
+    'token_expired' => 'QR expired — generate a new one on your host',
     'token_consumed' => 'QR already used — generate a new one',
-    'token_unknown' => 'QR not recognized by Mac — re-run /remote-pi pair',
-    'pair_timeout' => 'Timed out — make sure /remote-pi is running on your Mac',
+    'token_unknown' => 'QR not recognized by host — re-run /remote-pi pair',
+    'pair_timeout' => 'Timed out — make sure /remote-pi is running on your host',
     _ => e.message.isEmpty ? e.code : e.message,
   };
 
   static String _deviceName() {
     try {
+      if (kIsWeb) return 'Web Browser';
       if (Platform.isIOS) return 'iPhone';
       if (Platform.isAndroid) return 'Android device';
       return 'Mobile';
