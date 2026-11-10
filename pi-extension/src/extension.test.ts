@@ -595,6 +595,16 @@ describe("state machine + pair_request flow", () => {
     expect(_getState()).toBe("paired");
     // No additional outbound messages from this second pair_request
     expect(relayRef.current!.send.mock.calls.length).toBe(sendsBefore);
+
+    // Re-pairing with a fresh QR token succeeds and replies pair_ok
+    relayRef.current!.emit("message", makeInnerLine(APP_PEER_ID, {
+      type: "pair_request", id: "req-3", token: "fresh-token", device_name: "Phone",
+    }));
+    await vi.waitFor(() => {
+      const sent = relayRef.current!.send.mock.calls.slice(sendsBefore)
+        .map((c) => c[0] as string).map(decodeSentCt);
+      expect(sent.some((d) => d.inner.type === "pair_ok" && d.inner.in_reply_to === "req-3")).toBe(true);
+    }, { timeout: 2000 });
   });
 
   test("known peer reconnect: any non-pair message from peers.json → paired", async () => {

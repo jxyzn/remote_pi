@@ -241,6 +241,22 @@ class MeshSyncService extends ChangeNotifier {
       case MeshPublishConflict():
         if (!refetchOnConflict) return result;
         await pullOnDemand();
+        // Preserve any locally-held peers (e.g. a peer that was just paired
+        // right before this publish) across the conflict refetch so a stale
+        // relay watermark doesn't wipe out the newly-added peer.
+        if (!allowEmpty && peers.isNotEmpty) {
+          final current = await _storage.listPeers();
+          for (final p in peers) {
+            final std = toStandardB64(p.remoteEpk);
+            for (final c in current) {
+              if (c.remoteEpk != p.remoteEpk &&
+                  toStandardB64(c.remoteEpk) == std) {
+                await _storage.deletePeerSilent(c.remoteEpk);
+              }
+            }
+            await _storage.savePeerSilent(p);
+          }
+        }
         return _publishOnce(
           pk,
           refetchOnConflict: false,

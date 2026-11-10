@@ -8,6 +8,7 @@
 // No cipher, no safety number — the outer envelope's `ct` is base64 of
 // the JSON in plaintext (transparent to PeerTransport implementations).
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -111,7 +112,34 @@ Future<PairingResult> performPairing({
   };
   await transport.send(Uint8List.fromList(utf8.encode(jsonEncode(req))));
 
-  final raw = await transport.receive();
+  // If this device's Owner key is already attached in the host's
+  // `_activePeers` (re-pairing an already-paired host), the host
+  // ignores `pair_request` (`case "pair_request": break;`) for
+  // idempotency, while its active `PlainPeerChannel` replies to `ping`
+  // with `pong`. Send a fallback `ping` after 1.5s if no reply has
+  // arrived yet so re-pairing completes immediately instead of timing out.
+  final pingId = uuid7();
+  var received = false;
+  final pingTimer = Timer(const Duration(milliseconds: 1500), () {
+    if (received) return;
+    unawaited(
+      transport
+          .send(
+            Uint8List.fromList(
+              utf8.encode(jsonEncode({'type': 'ping', 'id': pingId})),
+            ),
+          )
+          .catchError((_) {}),
+    );
+  });
+
+  final Uint8List raw;
+  try {
+    raw = await transport.receive();
+    received = true;
+  } finally {
+    pingTimer.cancel();
+  }
   final inner = jsonDecode(utf8.decode(raw)) as Map<String, dynamic>;
   final type = inner['type'] as String?;
 
@@ -148,6 +176,37 @@ Future<PairingResult> performPairing({
     );
     await storage.savePeer(peer);
     return PairingResult(peer: peer, hostnameHint: pairOk.hostname);
+  }
+
+  if (type == 'pong' && inner['in_reply_to'] == pingId) {
+    PeerRecord? existing;
+    try {
+      final all = await storage.listPeers();
+      for (final p in all) {
+        if (p.remoteEpk == qr.epk) {
+          existing = p;
+          break;
+        }
+      }
+    } catch (_) {}
+    final piRoomId = qr.roomId ?? existing?.roomId ?? 'main';
+    final peer = PeerRecord(
+      remoteEpk: qr.epk,
+      sessionName: qr.sessionName.isNotEmpty
+          ? qr.sessionName
+          : (existing?.sessionName ?? 'Pi'),
+      relayUrl: qr.relayUrl ?? currentRelayUrl,
+      pairedAt: DateTime.now().toUtc().toIso8601String(),
+      nickname: existing?.nickname,
+      roomId: piRoomId,
+      harness: existing?.harness,
+    );
+    await storage.savePeer(peer);
+    return PairingResult(
+      peer: peer,
+      hostnameHint: existing?.nickname ??
+          (qr.sessionName.isNotEmpty ? qr.sessionName : null),
+    );
   }
 
   if (type == 'pair_error') {
