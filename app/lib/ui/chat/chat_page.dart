@@ -81,31 +81,10 @@ class ChatPage extends StatelessWidget {
       ),
     );
 
-    // Plan/57 — an interactive extension_ui_request (ask_user via pi-ask)
-    // renders as a full-screen modal layered ABOVE the Scaffold. Purely
-    // reactive: the overlay leaves the tree when the pending request clears
-    // (completed dismiss) — no route lifecycle to manage. `error` carries a
-    // submit-result rejection so the modal can offer a retry instead of a dead
-    // end.
-    final ready = state is ChatReady ? state : null;
-    final uiRequest = ready?.pendingUiRequest;
-    if (uiRequest == null) return scaffold;
-    return Stack(
-      children: [
-        scaffold,
-        Positioned.fill(
-          // Keyed by request id: a new flow must get a fresh State — question
-          // ids repeat across flows (e.g. "goal"), so reusing the State would
-          // leak old selections/custom text into the new modal.
-          child: ExtensionUiSheet(
-            key: ValueKey(uiRequest.id),
-            request: uiRequest,
-            error: ready?.pendingUiError,
-            onRespond: vm.respondExtensionUi,
-          ),
-        ),
-      ],
-    );
+    // An interactive extension_ui_request (ask_user via pi-ask) renders
+    // inline inside [_MessageList] directly above the input bar, allowing the
+    // user to scroll up freely through the chat context while answering.
+    return scaffold;
   }
 
   Widget _buildTopBar(BuildContext context, ChatState state) {
@@ -386,14 +365,19 @@ class ChatPage extends StatelessWidget {
         actionLabel: 'Re-pair',
         onAction: () => context.go('/pair'),
       ),
-      ChatReady(:final messages, :final streaming) => () {
+      ChatReady(
+        :final messages,
+        :final streaming,
+        :final pendingUiRequest,
+        :final pendingUiError,
+      ) => () {
         final visible = hideToolCalls
             ? messages.where((m) => m is! ToolEvent).toList()
             : messages;
         // Empty body → the default placeholder (Pi brand icon + "Nothing
         // here"), shown whenever there's nothing to render — including while
         // reconnecting (the reconnect handshake never swaps the body).
-        if (visible.isEmpty && streaming == null) {
+        if (visible.isEmpty && streaming == null && pendingUiRequest == null) {
           return const _EmptyState(
             icon: LucideIcons.terminal,
             message: 'Nothing here',
@@ -402,6 +386,9 @@ class ChatPage extends StatelessWidget {
         return _MessageList(
           messages: visible,
           streaming: streaming,
+          pendingUiRequest: pendingUiRequest,
+          pendingUiError: pendingUiError,
+          onRespondUi: vm.respondExtensionUi,
           onDecide: (id, decision) => vm.approveTool(id, decision),
         );
       }(),
@@ -566,17 +553,28 @@ class ChatPage extends StatelessWidget {
 class _MessageList extends StatelessWidget {
   final List<ChatMessage> messages;
   final StreamingMessage? streaming;
+  final ExtensionUiRequest? pendingUiRequest;
+  final String? pendingUiError;
+  final Future<void> Function(ExtensionUiResponse)? onRespondUi;
   final void Function(String, ApproveDecision) onDecide;
 
   const _MessageList({
     required this.messages,
     required this.streaming,
+    this.pendingUiRequest,
+    this.pendingUiError,
+    this.onRespondUi,
     required this.onDecide,
   });
 
   @override
   Widget build(BuildContext context) {
-    final itemCount = messages.length + (streaming != null ? 1 : 0);
+    final hasUi = pendingUiRequest != null;
+    final hasStreaming = streaming != null;
+    final uiOffset = hasUi ? 1 : 0;
+    final streamingOffset = hasStreaming ? 1 : 0;
+    final extraCount = uiOffset + streamingOffset;
+    final itemCount = messages.length + extraCount;
 
     // `reverse: true` anchors the viewport to the bottom (offset 0 = newest)
     // and keeps it there as content arrives — no manual scroll-to-bottom is
@@ -589,18 +587,26 @@ class _MessageList extends StatelessWidget {
       separatorBuilder: (context, idx) => const SizedBox(height: 14),
       itemBuilder: (_, i) {
         // Index 0 = bottom = newest. Stable keys are REQUIRED here: when the
-        // streaming bubble appears/disappears at index 0 every other item's
-        // index shifts by 1, and without keys Flutter re-matches elements by
-        // position — briefly painting the wrong message at a slot (the
-        // momentary C/B/A → B/C/A reorder). Keying by message id makes it
-        // match by identity instead.
-        if (streaming != null && i == 0) {
+        // pending UI card or streaming bubble appears/disappears at index 0 every
+        // other item's index shifts, and without keys Flutter re-matches
+        // elements by position. Keying by id makes it match by identity.
+        if (hasUi && i == 0) {
+          return KeyedSubtree(
+            key: ValueKey(pendingUiRequest!.id),
+            child: ExtensionUiSheet(
+              request: pendingUiRequest!,
+              error: pendingUiError,
+              onRespond: onRespondUi ?? (_) async {},
+            ),
+          );
+        }
+        if (hasStreaming && i == uiOffset) {
           return KeyedSubtree(
             key: const ValueKey('streaming'),
             child: StreamingBubble(streaming!),
           );
         }
-        final msgIdx = messages.length - 1 - (i - (streaming != null ? 1 : 0));
+        final msgIdx = messages.length - 1 - (i - extraCount);
         final msg = messages[msgIdx];
         return KeyedSubtree(
           key: ValueKey(msg.id),

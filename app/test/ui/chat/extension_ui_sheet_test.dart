@@ -196,4 +196,47 @@ void main() {
 
     expect(find.text('Clarification resolved.'), findsOneWidget);
   });
+
+  testWidgets('tapping header cancel icon cancels the flow', (tester) async {
+    final sent = <ExtensionUiResponse>[];
+    await pumpSheet(
+      tester,
+      request: _richRequest(),
+      onRespond: (r) async => sent.add(r),
+    );
+
+    await tester.tap(find.byTooltip('Cancel'));
+    await tester.pump();
+
+    expect(sent, hasLength(1));
+    expect(sent.single.cancelled, isTrue);
+    expect(sent.single.ask?.isCancel, isTrue);
+  });
+
+  testWidgets('renders inline in a scrollable list without viewport overflow', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ListView(
+            children: [
+              for (int i = 0; i < 3; i++)
+                ListTile(title: Text('Message $i')),
+              ExtensionUiSheet(
+                key: const ValueKey('tool:tc_1'),
+                request: _richRequest(),
+                onRespond: (_) async {},
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Direction'), findsOneWidget);
+    expect(find.text('Message 0'), findsOneWidget);
+    await tester.drag(find.byType(ListView), const Offset(0, -100));
+    await tester.pump();
+  });
 }

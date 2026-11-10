@@ -488,4 +488,91 @@ describe("extension_ui_bridge", () => {
       expect(sent).toHaveLength(0);
     });
   });
+
+  describe("rpiv:ask-user bridge", () => {
+    it("translates rpiv:ask-user:prompt, routes answers/cancels to rpiv:ask-user:answer, and handles blocked/answer-result", () => {
+      const bus = fakeBus();
+      const sent: ServerMessage[] = [];
+      const bridge = createExtensionUiBridge(fakePi(bus), (m) => sent.push(m))!;
+
+      bus.emit("rpiv:ask-user:prompt", {
+        toolCallId: "rpiv_tc_1",
+        questions: [
+          {
+            question: "Pick a target",
+            header: "Target",
+            multiSelect: false,
+            options: [
+              { label: "Staging", description: "Deploy to staging" },
+              { label: "Prod", description: "Deploy to prod" },
+            ],
+          },
+        ],
+      });
+
+      expect(sent).toHaveLength(1);
+      expect(sent[0]).toMatchObject({
+        type: "extension_ui_request",
+        id: "rpiv_tc_1",
+        method: "select",
+        options: ["Staging", "Prod"],
+        ask: {
+          flow_id: "rpiv_tc_1",
+          tool_call_id: "rpiv_tc_1",
+          source: "rpiv",
+        },
+      });
+
+      // Rich answer routes to rpiv:ask-user:answer with optionIndexes
+      bridge.respond({
+        type: "extension_ui_response",
+        id: "rpiv_tc_1",
+        ask: {
+          flow_id: "rpiv_tc_1",
+          kind: "answer",
+          mode: "submit",
+          answers: { q_0: { values: ["Prod"] } },
+        },
+      });
+
+      const answers = bus.emitted.filter((e) => e.name === "rpiv:ask-user:answer");
+      expect(answers).toHaveLength(1);
+      expect(answers[0]?.data).toEqual({
+        toolCallId: "rpiv_tc_1",
+        requestId: "rpiv_tc_1",
+        answers: [{ questionIndex: 0, optionIndexes: [1] }],
+      });
+
+      // Error feedback via rpiv:ask-user:answer-result surfaces warning notify
+      sent.length = 0;
+      bus.emit("rpiv:ask-user:answer-result", {
+        ok: false,
+        toolCallId: "rpiv_tc_1",
+        reason: "Invalid selection.",
+      });
+      expect(sent).toHaveLength(1);
+      expect(sent[0]).toMatchObject({
+        type: "extension_ui_request",
+        id: "rpiv_tc_1",
+        method: "notify",
+        notify_type: "warning",
+        message: "Invalid selection.",
+      });
+
+      // Blocked = false resolves & dismisses the flow
+      sent.length = 0;
+      bus.emit("rpiv:ask-user:blocked", {
+        active: false,
+        toolCallId: "rpiv_tc_1",
+      });
+      expect(sent).toHaveLength(1);
+      expect(sent[0]).toMatchObject({
+        type: "extension_ui_request",
+        id: "rpiv_tc_1",
+        method: "notify",
+        message: "Clarification resolved.",
+      });
+      expect(bridge.pendingRequests()).toEqual([]);
+    });
+  });
 });
