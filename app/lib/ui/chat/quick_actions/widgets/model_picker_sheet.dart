@@ -151,12 +151,14 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final typo = context.typo;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 6, 8, 10),
+      padding: const EdgeInsets.fromLTRB(12, 4, 8, 6),
       child: Row(
         children: [
           IconButton(
-            icon: Icon(LucideIcons.arrowLeft, size: 18, color: colors.muted),
+            visualDensity: VisualDensity.compact,
+            icon: Icon(LucideIcons.arrowLeft, size: 18, color: colors.muted2),
             onPressed: () => Navigator.of(context).pop(),
             tooltip: 'Back',
           ),
@@ -164,17 +166,13 @@ class _Header extends StatelessWidget {
           Expanded(
             child: Text(
               'Choose a model',
-              style: TextStyle(
-                fontFamily: kMonoFamily,
-                fontSize: 13,
-                color: colors.text,
-                fontWeight: FontWeight.w500,
-              ),
+              style: typo.sansTitle.copyWith(fontSize: 14.5),
             ),
           ),
           IconButton(
             key: const Key('model-picker-refresh'),
-            icon: Icon(LucideIcons.refreshCw, size: 18, color: colors.muted),
+            visualDensity: VisualDensity.compact,
+            icon: Icon(LucideIcons.refreshCw, size: 18, color: colors.muted2),
             onPressed: onRefresh,
             tooltip: 'Refresh',
           ),
@@ -271,23 +269,24 @@ class _Chip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final typo = context.typo;
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
           border: Border.all(
-            color: selected ? colors.accent : colors.border,
+            color: colors.border,
+            width: 1.4,
           ),
-          color: selected ? colors.accent.withValues(alpha: 0.12) : colors.bg,
-          borderRadius: BorderRadius.circular(4),
+          color: selected ? colors.accent : colors.surface,
+          borderRadius: BorderRadius.circular(6),
         ),
         child: Text(
           label,
-          style: TextStyle(
-            fontFamily: kMonoFamily,
-            fontSize: 11,
-            color: selected ? colors.accent : colors.muted,
+          style: typo.badge.copyWith(
+            fontSize: 10.5,
+            color: selected ? colors.onAccent : colors.muted2,
           ),
         ),
       ),
@@ -308,10 +307,11 @@ class _ModelTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final typo = context.typo;
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         child: Row(
           children: [
             Expanded(
@@ -324,9 +324,9 @@ class _ModelTile extends StatelessWidget {
                         child: Text(
                           model.name,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontFamily: kMonoFamily,
-                            fontSize: 13,
+                          style: typo.mono.copyWith(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
                             color: current ? colors.accent : colors.text,
                           ),
                         ),
@@ -337,13 +337,12 @@ class _ModelTile extends StatelessWidget {
                       ],
                     ],
                   ),
-                  const SizedBox(height: 3),
+                  const SizedBox(height: 2),
                   Text(
                     _subtitle(model),
-                    style: TextStyle(
-                      fontFamily: kMonoFamily,
-                      fontSize: 10,
-                      color: colors.muted,
+                    style: typo.sansSmall.copyWith(
+                      fontSize: 11,
+                      color: colors.muted2,
                     ),
                   ),
                 ],
@@ -371,18 +370,19 @@ class _Badge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final typo = context.typo;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
       decoration: BoxDecoration(
-        color: colors.accent.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(3),
+        color: colors.modelBadgeBg,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: colors.modelBadgeBorder),
       ),
       child: Text(
         label,
-        style: TextStyle(
-          fontFamily: kMonoFamily,
+        style: typo.badge.copyWith(
           fontSize: 9,
-          color: colors.accent,
+          color: colors.text,
         ),
       ),
     );
@@ -418,11 +418,7 @@ class _EmptyState extends StatelessWidget {
       child: Center(
         child: Text(
           'No models available',
-          style: TextStyle(
-            fontFamily: kMonoFamily,
-            fontSize: 12,
-            color: context.colors.muted,
-          ),
+          style: context.typo.sansBody.copyWith(color: context.colors.muted2),
         ),
       ),
     );
@@ -437,6 +433,7 @@ class _ErrorState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final typo = context.typo;
     return Padding(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -445,23 +442,12 @@ class _ErrorState extends StatelessWidget {
           Text(
             message,
             textAlign: TextAlign.center,
-            style: TextStyle(
-              fontFamily: kMonoFamily,
-              fontSize: 12,
-              color: colors.error,
-            ),
+            style: typo.sansBody.copyWith(color: colors.error),
           ),
           const SizedBox(height: 14),
           OutlinedButton(
             onPressed: onRetry,
-            style: OutlinedButton.styleFrom(
-              foregroundColor: colors.accent,
-              side: BorderSide(color: colors.border),
-            ),
-            child: const Text(
-              'Retry',
-              style: TextStyle(fontFamily: kMonoFamily, fontSize: 12),
-            ),
+            child: const Text('Retry'),
           ),
         ],
       ),

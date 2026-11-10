@@ -30,12 +30,12 @@ class UserBubble extends StatelessWidget {
     return Align(
       alignment: Alignment.centerRight,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 300),
+        constraints: const BoxConstraints(maxWidth: 320),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Opacity(
-              opacity: isPending ? 0.6 : 1.0,
+              opacity: isPending ? 0.65 : 1.0,
               child: image != null
                   ? ImageBubble(
                       image: image,
@@ -45,14 +45,18 @@ class UserBubble extends StatelessWidget {
                   : Container(
                       decoration: BoxDecoration(
                         color: colors.userBubble,
-                        borderRadius: BorderRadius.circular(12),
-                        border: isFailed
-                            ? Border.all(color: colors.error, width: 1)
-                            : null,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: isFailed
+                              ? colors.error
+                              : colors.userBubbleBorder,
+                          width: 1.5,
+                        ),
+                        boxShadow: colors.retroShadowSm,
                       ),
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 13,
-                        vertical: 10,
+                        horizontal: 11,
+                        vertical: 8,
                       ),
                       // Selectable so the user can copy their own message (the
                       // agent reply is already selectable via AgentMarkdown).
@@ -64,7 +68,7 @@ class UserBubble extends StatelessWidget {
             ),
             if (isPending || isSteering || isFailed)
               Padding(
-                padding: const EdgeInsets.only(top: 4, right: 4),
+                padding: const EdgeInsets.only(top: 4, right: 2),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -73,15 +77,15 @@ class UserBubble extends StatelessWidget {
                         width: 10,
                         height: 10,
                         child: CircularProgressIndicator(
-                          color: colors.muted,
-                          strokeWidth: 1.2,
+                          color: colors.muted2,
+                          strokeWidth: 1.4,
                         ),
                       ),
-                      const SizedBox(width: 6),
+                      const SizedBox(width: 5),
                       Text(
                         isSteering ? 'steering…' : 'sending…',
-                        style: typo.sansBody.copyWith(
-                          color: colors.muted,
+                        style: typo.sansSmall.copyWith(
+                          color: colors.muted2,
                           fontSize: 11,
                         ),
                       ),
@@ -94,9 +98,10 @@ class UserBubble extends StatelessWidget {
                       const SizedBox(width: 4),
                       Text(
                         'not delivered',
-                        style: typo.sansBody.copyWith(
+                        style: typo.sansSmall.copyWith(
                           color: colors.error,
                           fontSize: 11,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ],
@@ -126,15 +131,17 @@ class CompactionBubble extends StatelessWidget {
     final tokens = message.tokensBefore;
     final summary = message.summary;
     final colors = context.colors;
+    final typo = context.typo;
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 360),
+        constraints: const BoxConstraints(maxWidth: 380),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           decoration: BoxDecoration(
             color: colors.surface,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: colors.border),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: colors.border, width: 1.5),
+            boxShadow: colors.retroShadowSm,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -147,31 +154,28 @@ class CompactionBubble extends StatelessWidget {
                   Expanded(
                     child: Text(
                       'Context compacted',
-                      style: TextStyle(
-                        fontFamily: kMonoFamily,
+                      style: typo.sansSmall.copyWith(
                         fontSize: 12,
                         color: colors.text,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),
                   if (tokens != null)
                     Text(
                       '~$tokens tokens',
-                      style: TextStyle(
-                        fontFamily: kMonoFamily,
+                      style: typo.monoSmall.copyWith(
                         fontSize: 11,
-                        color: colors.muted,
+                        color: colors.muted2,
                       ),
                     ),
                 ],
               ),
               if (summary.isNotEmpty) ...[
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
                 Text(
                   summary,
-                  style: TextStyle(
-                    fontFamily: kMonoFamily,
+                  style: typo.sansSmall.copyWith(
                     fontSize: 12,
                     color: colors.muted2,
                   ),

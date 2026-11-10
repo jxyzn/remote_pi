@@ -47,56 +47,41 @@ class _SyncRequiredPageState extends State<SyncRequiredPage> {
               'Backup without losing your paired Pis.';
 
     final colors = context.colors;
+    final typo = context.typo;
     return Scaffold(
       backgroundColor: colors.bg,
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
+          padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
               Icon(
                 isIOS ? LucideIcons.cloudOff : LucideIcons.cloudUpload,
                 color: colors.accent,
-                size: 44,
+                size: 40,
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
               Text(
                 'Sync required',
-                style: TextStyle(
-                  fontFamily: kMonoFamily,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
-                  color: colors.text,
-                ),
+                style: typo.display.copyWith(fontSize: 20),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
               Text(
                 why,
-                style: TextStyle(
-                  fontFamily: kMonoFamily,
-                  fontSize: 12,
-                  color: colors.muted2,
-                  height: 1.4,
-                ),
+                style: typo.sansBody.copyWith(color: colors.muted2),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 18),
               Text(
-                'To enable, on this device:',
-                style: TextStyle(
-                  fontFamily: kMonoFamily,
-                  fontSize: 11,
-                  color: colors.muted,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.4,
-                ),
+                'TO ENABLE, ON THIS DEVICE:',
+                style: typo.badge.copyWith(color: colors.muted2),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
               Expanded(
                 child: ListView.separated(
                   itemCount: requirements.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 10),
+                  separatorBuilder: (_, _) => const SizedBox(height: 8),
                   itemBuilder: (_, i) => _RequirementCard(
                     index: i + 1,
                     requirement: requirements[i],
@@ -106,15 +91,6 @@ class _SyncRequiredPageState extends State<SyncRequiredPage> {
               const SizedBox(height: 12),
               FilledButton(
                 onPressed: _checking ? null : _recheck,
-                style: FilledButton.styleFrom(
-                  backgroundColor: colors.accent,
-                  foregroundColor: colors.onAccent,
-                  disabledBackgroundColor: colors.border,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: const RoundedRectangleBorder(
-                    borderRadius: BorderRadius.all(Radius.circular(6)),
-                  ),
-                ),
                 child: _checking
                     ? SizedBox(
                         width: 18,
@@ -124,16 +100,9 @@ class _SyncRequiredPageState extends State<SyncRequiredPage> {
                           strokeWidth: 2,
                         ),
                       )
-                    : Text(
-                        'Check again',
-                        style: TextStyle(
-                          fontFamily: kMonoFamily,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+                    : const Text('Check again'),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
             ],
           ),
         ),
@@ -187,31 +156,32 @@ class _RequirementCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final typo = context.typo;
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: colors.surface,
-        border: Border.all(color: colors.border),
-        borderRadius: const BorderRadius.all(Radius.circular(6)),
+        border: Border.all(color: colors.border, width: 1.5),
+        borderRadius: const BorderRadius.all(Radius.circular(8)),
+        boxShadow: colors.retroShadowSm,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 22,
-            height: 22,
+            width: 24,
+            height: 24,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: colors.accent.withValues(alpha: 0.15),
-              borderRadius: const BorderRadius.all(Radius.circular(11)),
+              color: colors.accent,
+              borderRadius: const BorderRadius.all(Radius.circular(6)),
+              border: Border.all(color: colors.border),
             ),
             child: Text(
               '$index',
-              style: TextStyle(
-                fontFamily: kMonoFamily,
+              style: typo.badge.copyWith(
                 fontSize: 11,
-                color: colors.accent,
-                fontWeight: FontWeight.w600,
+                color: colors.onAccent,
               ),
             ),
           ),
@@ -222,32 +192,20 @@ class _RequirementCard extends StatelessWidget {
               children: [
                 Text(
                   requirement.title,
-                  style: TextStyle(
-                    fontFamily: kMonoFamily,
-                    fontSize: 13,
-                    color: colors.text,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: typo.sansTitle.copyWith(fontSize: 13.5),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 Text(
                   requirement.path,
-                  style: TextStyle(
-                    fontFamily: kMonoFamily,
-                    fontSize: 11,
-                    color: colors.muted2,
-                    height: 1.4,
-                  ),
+                  style: typo.sansSmall.copyWith(color: colors.muted2),
                 ),
                 if (requirement.note != null) ...[
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 3),
                   Text(
                     requirement.note!,
-                    style: TextStyle(
-                      fontFamily: kMonoFamily,
-                      fontSize: 10.5,
+                    style: typo.sansSmall.copyWith(
+                      fontSize: 11,
                       color: colors.muted,
-                      height: 1.4,
                       fontStyle: FontStyle.italic,
                     ),
                   ),

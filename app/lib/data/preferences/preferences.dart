@@ -17,7 +17,9 @@ class Preferences extends ChangeNotifier {
   String? _relayUrl;
   bool _onboardingCompleted = false;
   ThemeMode _themeMode = ThemeMode.system;
+  AppThemePreset _themePreset = AppThemePreset.classic;
   AppFontScale _fontScale = AppFontScale.standard;
+  AppRetroFontMode _retroFontMode = AppRetroFontMode.arcade;
 
   Preferences([FlutterSecureStorage? store])
       : _store = store ?? const FlutterSecureStorage();
@@ -27,7 +29,9 @@ class Preferences extends ChangeNotifier {
   static const _kRelayUrlKey = 'prefs.relay_url';
   static const _kOnboardingCompletedKey = 'prefs.onboarding_completed';
   static const _kThemeModeKey = 'prefs.theme_mode';
+  static const _kThemePresetKey = 'prefs.theme_preset';
   static const _kFontScaleKey = 'prefs.font_scale';
+  static const _kRetroFontModeKey = 'prefs.retro_font_mode';
 
   /// True → chat hides `ToolEvent` rows (only user/assistant text remain).
   bool get hideToolCalls => _hideToolCalls;
@@ -79,10 +83,16 @@ class Preferences extends ChangeNotifier {
   /// in `main.dart` and set from the Settings "Display" section.
   ThemeMode get themeMode => _themeMode;
 
+  /// Preferred theme preset (`classic` default vs `pico8`).
+  AppThemePreset get themePreset => _themePreset;
+
   /// Preferred text size (issue #114). Applied as a `TextScaler` above the
   /// router in `main.dart`, so it scales the whole UI — including the per-widget
   /// `copyWith(fontSize: …)` overrides that a typography-only change would miss.
   AppFontScale get fontScale => _fontScale;
+
+  /// Preferred header/badge font mode (`arcade` pixel font vs `clean` sans).
+  AppRetroFontMode get retroFontMode => _retroFontMode;
 
   /// Hydrate from secure storage. Safe to call multiple times.
   Future<void> load() async {
@@ -123,9 +133,25 @@ class Preferences extends ChangeNotifier {
       changed = true;
     }
 
+    final preset = AppThemePreset.fromName(
+      await _store.read(key: _kThemePresetKey),
+    );
+    if (preset != _themePreset) {
+      _themePreset = preset;
+      changed = true;
+    }
+
     final scale = AppFontScale.fromName(await _store.read(key: _kFontScaleKey));
     if (scale != _fontScale) {
       _fontScale = scale;
+      changed = true;
+    }
+
+    final fontMode = AppRetroFontMode.fromName(
+      await _store.read(key: _kRetroFontModeKey),
+    );
+    if (fontMode != _retroFontMode) {
+      _retroFontMode = fontMode;
       changed = true;
     }
 
@@ -201,6 +227,14 @@ class Preferences extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Persist the preferred [AppThemePreset]. Stored by `name`.
+  Future<void> setThemePreset(AppThemePreset value) async {
+    if (_themePreset == value) return;
+    _themePreset = value;
+    await _store.write(key: _kThemePresetKey, value: value.name);
+    notifyListeners();
+  }
+
   /// Persist the preferred [AppFontScale]. Stored by `name` so the value
   /// survives enum reordering.
   Future<void> setFontScale(AppFontScale value) async {
@@ -210,12 +244,22 @@ class Preferences extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Persist the preferred [AppRetroFontMode]. Stored by `name`.
+  Future<void> setRetroFontMode(AppRetroFontMode value) async {
+    if (_retroFontMode == value) return;
+    _retroFontMode = value;
+    await _store.write(key: _kRetroFontModeKey, value: value.name);
+    notifyListeners();
+  }
+
   static ThemeMode _themeModeFromString(String? raw) {
     switch (raw) {
       case 'light':
         return ThemeMode.light;
       case 'dark':
         return ThemeMode.dark;
+      case 'system':
+        return ThemeMode.system;
       default:
         return ThemeMode.system;
     }

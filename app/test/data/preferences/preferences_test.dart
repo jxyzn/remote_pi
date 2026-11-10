@@ -1,5 +1,6 @@
 import 'package:app/data/preferences/preferences.dart';
-import 'package:app/ui/core/themes/app_font_scale.dart';
+import 'package:app/ui/core/themes/themes.dart';
+import 'package:flutter/material.dart' show Brightness, ThemeMode;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -211,6 +212,61 @@ void main() {
       await p.setSelectedRoom(epk: null);
       expect(p.selectedPeerEpk, isNull);
       expect(p.selectedRoomRaw, isNull);
+    });
+
+    test('themePreset defaults to classic and round-trips through storage',
+        () async {
+      final store = _FakeSecureStorage();
+      final p = Preferences(store);
+      await p.load();
+      expect(p.themePreset, AppThemePreset.classic);
+      expect(p.themeMode, ThemeMode.system);
+
+      await p.setThemePreset(AppThemePreset.pico8);
+      expect(p.themePreset, AppThemePreset.pico8);
+
+      final reloaded = Preferences(store);
+      await reloaded.load();
+      expect(reloaded.themePreset, AppThemePreset.pico8);
+    });
+
+    test('retroFontMode defaults to arcade and round-trips through storage',
+        () async {
+      final store = _FakeSecureStorage();
+      final p = Preferences(store);
+      await p.load();
+      expect(p.retroFontMode, AppRetroFontMode.arcade);
+
+      await p.setRetroFontMode(AppRetroFontMode.clean);
+      expect(p.retroFontMode, AppRetroFontMode.clean);
+
+      final reloaded = Preferences(store);
+      await reloaded.load();
+      expect(reloaded.retroFontMode, AppRetroFontMode.clean);
+    });
+
+    test('AppColors.forPreset resolves Classic vs PICO-8 palettes and shadows',
+        () {
+      final classicDark =
+          AppColors.forPreset(AppThemePreset.classic, Brightness.dark);
+      final picoDark =
+          AppColors.forPreset(AppThemePreset.pico8, Brightness.dark);
+      final picoLight =
+          AppColors.forPreset(AppThemePreset.pico8, Brightness.light);
+
+      expect(classicDark.retroShadow, isEmpty);
+      expect(classicDark.retroShadowSm, isEmpty);
+      expect(picoDark.retroShadow, isNotEmpty);
+      expect(picoLight.retroShadowSm, isNotEmpty);
+      expect(picoDark.avatarColorFor('session-a'),
+          equals(picoDark.avatarColorFor('session-a')));
+
+      final theme = buildDarkTheme(
+        preset: AppThemePreset.pico8,
+        fontMode: AppRetroFontMode.arcade,
+      );
+      expect(theme.extension<AppColors>()?.bg, AppColors.pico8Dark.bg);
+      expect(theme.extension<AppTypography>(), isNotNull);
     });
   });
 }

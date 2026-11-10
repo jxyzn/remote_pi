@@ -10,38 +10,41 @@ class DetailPlaceholder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final typo = context.typo;
     return Scaffold(
       backgroundColor: colors.bg,
       body: Center(
-        child: Opacity(
-          opacity: 0.4,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(LucideIcons.messagesSquare, color: colors.muted, size: 56),
-              const SizedBox(height: 18),
-              Text(
-                'Select a session',
-                style: TextStyle(
-                  fontFamily: kMonoFamily,
-                  color: colors.muted2,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: colors.surface,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: colors.border, width: 1.5),
+                boxShadow: colors.retroShadowSm,
               ),
-              const SizedBox(height: 6),
-              Text(
-                'Pick a session on the left to open its chat.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontFamily: kMonoFamily,
-                  color: colors.muted,
-                  fontSize: 11,
-                  height: 1.4,
-                ),
+              alignment: Alignment.center,
+              child: Icon(
+                LucideIcons.messagesSquare,
+                color: colors.accent,
+                size: 28,
               ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              'Select a session',
+              style: typo.display.copyWith(fontSize: 15, color: colors.text),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Pick a session on the left to open its chat.',
+              textAlign: TextAlign.center,
+              style: typo.sansSmall.copyWith(color: colors.muted2),
+            ),
+          ],
         ),
       ),
     );

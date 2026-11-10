@@ -48,21 +48,23 @@ class _UpdateCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final typo = context.typo;
     final vm = context.read<UpdateBannerViewModel>();
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 2),
       child: Material(
         color: colors.surface,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(8),
         child: InkWell(
           key: const Key('update-banner-download'),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(8),
           onTap: vm.download,
           child: Container(
-            padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+            padding: const EdgeInsets.fromLTRB(12, 9, 6, 9),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: colors.accent.withValues(alpha: 0.45)),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: colors.accent, width: 1.5),
+              boxShadow: colors.retroShadowSm,
             ),
             child: Row(
               children: [
@@ -71,7 +73,7 @@ class _UpdateCard extends StatelessWidget {
                   size: 18,
                   color: colors.accent,
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -80,18 +82,17 @@ class _UpdateCard extends StatelessWidget {
                       Text(
                         'Update available',
                         overflow: TextOverflow.ellipsis,
-                        style: context.typo.sansBody.copyWith(
+                        style: typo.sansTitle.copyWith(
                           color: colors.text,
-                          fontWeight: FontWeight.w600,
                           fontSize: 13.5,
                         ),
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 1),
                       Text(
                         'v${info.version} · tap to download the APK',
                         overflow: TextOverflow.ellipsis,
-                        style: context.typo.monoSmall.copyWith(
-                          color: colors.muted,
+                        style: typo.monoSmall.copyWith(
+                          color: colors.muted2,
                         ),
                       ),
                     ],
