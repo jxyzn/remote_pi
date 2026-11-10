@@ -167,6 +167,42 @@ class ToolEvent extends ChatMessage {
 /// ran but errored (a distinct, red outcome). `expired` = approval timed out.
 enum ToolEventStatus { pending, allowed, denied, expired, completed, failed }
 
+/// Session verbosity level governing how tool calls are rendered in chat:
+/// - [terse]: all tool calls initially collapsed into a single line; user clicks to expand.
+/// - [defaultLevel]: active and most recent tool calls are expanded; older completed tools
+///   collapse automatically, while failed tools remain expanded.
+/// - [verbose]: all tool calls are left expanded unless clicked to collapse.
+enum SessionVerbosity {
+  terse(
+    'terse',
+    'Terse',
+    'All tool calls initially collapsed into a single line.',
+  ),
+  defaultLevel(
+    'default',
+    'Default',
+    'Most recent tool call stays expanded; older completed tools collapse.',
+  ),
+  verbose(
+    'verbose',
+    'Verbose',
+    'All tool calls stay expanded unless clicked.',
+  );
+
+  final String id;
+  final String label;
+  final String description;
+  const SessionVerbosity(this.id, this.label, this.description);
+
+  static SessionVerbosity fromString(String? raw) {
+    return switch (raw?.toLowerCase()) {
+      'terse' => SessionVerbosity.terse,
+      'verbose' => SessionVerbosity.verbose,
+      _ => SessionVerbosity.defaultLevel,
+    };
+  }
+}
+
 /// Plan/32 — a context-compaction marker rendered as a system bubble
 /// (distinct from user/assistant). [summary] is the Pi's recap of the
 /// compacted thread; [tokensBefore] is the token count reclaimed (null when

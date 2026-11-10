@@ -2,7 +2,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show ThemeMode;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import 'package:app/domain/session_state.dart' show SessionVerbosity;
 import 'package:app/ui/core/themes/app_font_scale.dart';
+
+export 'package:app/domain/session_state.dart' show SessionVerbosity;
 
 /// App-wide UI preferences (persisted across launches).
 ///
@@ -13,6 +16,7 @@ import 'package:app/ui/core/themes/app_font_scale.dart';
 class Preferences extends ChangeNotifier {
   final FlutterSecureStorage _store;
   bool _hideToolCalls = false;
+  SessionVerbosity _sessionVerbosity = SessionVerbosity.defaultLevel;
   String? _selectedPeerEpk;
   String? _relayUrl;
   bool _onboardingCompleted = false;
@@ -23,6 +27,7 @@ class Preferences extends ChangeNotifier {
       : _store = store ?? const FlutterSecureStorage();
 
   static const _kHideToolCallsKey = 'prefs.hide_tool_calls';
+  static const _kSessionVerbosityKey = 'prefs.session_verbosity';
   static const _kSelectedPeerEpkKey = 'prefs.selected_peer_epk';
   static const _kRelayUrlKey = 'prefs.relay_url';
   static const _kOnboardingCompletedKey = 'prefs.onboarding_completed';
@@ -31,6 +36,9 @@ class Preferences extends ChangeNotifier {
 
   /// True → chat hides `ToolEvent` rows (only user/assistant text remain).
   bool get hideToolCalls => _hideToolCalls;
+
+  /// Session verbosity level for tool call cards (terse, default, verbose).
+  SessionVerbosity get sessionVerbosity => _sessionVerbosity;
 
   /// Epoch of the peer the user last picked from Home — the one
   /// `/chat` will connect to when it mounts. Null = no peer selected yet
@@ -95,6 +103,13 @@ class Preferences extends ChangeNotifier {
       changed = true;
     }
 
+    final verbosityRaw = await _store.read(key: _kSessionVerbosityKey);
+    final verbosity = SessionVerbosity.fromString(verbosityRaw);
+    if (verbosity != _sessionVerbosity) {
+      _sessionVerbosity = verbosity;
+      changed = true;
+    }
+
     final selected = await _store.read(key: _kSelectedPeerEpkKey);
     final cleaned = (selected != null && selected.isNotEmpty) ? selected : null;
     if (cleaned != _selectedPeerEpk) {
@@ -138,6 +153,16 @@ class Preferences extends ChangeNotifier {
     await _store.write(
       key: _kHideToolCallsKey,
       value: value.toString(),
+    );
+    notifyListeners();
+  }
+
+  Future<void> setSessionVerbosity(SessionVerbosity value) async {
+    if (_sessionVerbosity == value) return;
+    _sessionVerbosity = value;
+    await _store.write(
+      key: _kSessionVerbosityKey,
+      value: value.id,
     );
     notifyListeners();
   }

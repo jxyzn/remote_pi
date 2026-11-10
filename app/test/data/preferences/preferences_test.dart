@@ -212,5 +212,36 @@ void main() {
       expect(p.selectedPeerEpk, isNull);
       expect(p.selectedRoomRaw, isNull);
     });
+
+    test(
+      'sessionVerbosity defaults to defaultLevel and round-trips through storage',
+      () async {
+        final store = _FakeSecureStorage();
+        final p = Preferences(store);
+        await p.load();
+        expect(p.sessionVerbosity, SessionVerbosity.defaultLevel);
+
+        var notified = 0;
+        p.addListener(() => notified++);
+
+        await p.setSessionVerbosity(SessionVerbosity.terse);
+        expect(p.sessionVerbosity, SessionVerbosity.terse);
+        expect(await store.read(key: 'prefs.session_verbosity'), 'terse');
+        expect(notified, 1);
+
+        // No-op if value is unchanged
+        await p.setSessionVerbosity(SessionVerbosity.terse);
+        expect(notified, 1);
+
+        await p.setSessionVerbosity(SessionVerbosity.verbose);
+        expect(p.sessionVerbosity, SessionVerbosity.verbose);
+        expect(await store.read(key: 'prefs.session_verbosity'), 'verbose');
+        expect(notified, 2);
+
+        final reloaded = Preferences(store);
+        await reloaded.load();
+        expect(reloaded.sessionVerbosity, SessionVerbosity.verbose);
+      },
+    );
   });
 }

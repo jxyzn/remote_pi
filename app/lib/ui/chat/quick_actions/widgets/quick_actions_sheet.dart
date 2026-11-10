@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:app/config/dependencies.dart';
 import 'package:app/data/actions/actions_repository.dart' show ActionFailure;
+import 'package:app/data/preferences/preferences.dart';
 import 'package:app/protocol/protocol.dart';
 import 'package:app/routing/adaptive.dart';
 import 'package:app/ui/core/themes/themes.dart';
@@ -121,6 +122,7 @@ class _QuickActionsSheetBodyState extends State<QuickActionsSheetBody> {
     final vm = context.watch<QuickActionsViewModel>();
     final state = vm.state;
     final busyAction = state is QuickActionsBusy ? state.action : null;
+    final prefs = context.watch<Preferences?>();
 
     return SafeArea(
       top: false,
@@ -165,6 +167,13 @@ class _QuickActionsSheetBodyState extends State<QuickActionsSheetBody> {
               busy: busyAction == ActionName.thinkingSet,
               onPick: (level) => _onThinking(vm, level),
             ),
+            if (prefs != null) ...[
+              const _Divider(),
+              _VerbosityRow(
+                current: prefs.sessionVerbosity,
+                onPick: prefs.setSessionVerbosity,
+              ),
+            ],
             const SizedBox(height: 18),
           ],
         ),
@@ -597,6 +606,63 @@ class _SegButton extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _VerbosityRow extends StatelessWidget {
+  final SessionVerbosity current;
+  final ValueChanged<SessionVerbosity> onPick;
+  const _VerbosityRow({
+    required this.current,
+    required this.onPick,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(LucideIcons.listTree, color: colors.accent, size: 18),
+              const SizedBox(width: 14),
+              Text(
+                'Verbosity',
+                style: TextStyle(
+                  fontFamily: kMonoFamily,
+                  fontSize: 11,
+                  color: colors.muted,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Container(
+            decoration: BoxDecoration(
+              border: Border.all(color: colors.border),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Row(
+              children: [
+                for (final level in SessionVerbosity.values)
+                  Expanded(
+                    child: _SegButton(
+                      key: Key('qa-verbosity-${level.id}'),
+                      label: level.label.toLowerCase(),
+                      selected: current == level,
+                      disabled: false,
+                      onTap: () => onPick(level),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -324,6 +324,41 @@ class _DisplaySection extends StatelessWidget {
             ],
           ),
         ),
+        // Session verbosity — Terse (collapsed), Default (recent expanded), Verbose (expanded).
+        Padding(
+          padding: const EdgeInsets.fromLTRB(18, 12, 18, 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Session verbosity',
+                style: context.typo.sansBody.copyWith(color: colors.text),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                prefs.sessionVerbosity.description,
+                style: context.typo.sansBody.copyWith(
+                  color: colors.muted,
+                  fontSize: 12,
+                ),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: SegmentedButton<SessionVerbosity>(
+                  showSelectedIcon: false,
+                  segments: [
+                    for (final level in SessionVerbosity.values)
+                      ButtonSegment(value: level, label: Text(level.label)),
+                  ],
+                  selected: {prefs.sessionVerbosity},
+                  onSelectionChanged: (s) =>
+                      prefs.setSessionVerbosity(s.first),
+                ),
+              ),
+            ],
+          ),
+        ),
         SwitchListTile(
           contentPadding: const EdgeInsets.symmetric(horizontal: 18),
           activeThumbColor: colors.accent,
