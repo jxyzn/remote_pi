@@ -37,6 +37,9 @@ class ChatPage extends StatelessWidget {
   /// visible change.
   final String? initialDevice;
 
+  /// Initial model name known before ViewModel bootstrap (from Home / SessionSelection).
+  final String? initialModel;
+
   /// Plan/32g — the live state of the tile Home tapped (its green dot). Seeds
   /// the AppBar status dot so it doesn't flash "reconnecting" before the VM
   /// reads the real runtime. Superseded by the live signal once it resolves
@@ -52,9 +55,18 @@ class ChatPage extends StatelessWidget {
     super.key,
     this.initialTitle,
     this.initialDevice,
+    this.initialModel,
     this.initialOnline = false,
     this.showBack = true,
   });
+
+  static bool _canRunActions(ChatState state) {
+    if (state is! ChatReady) return false;
+    return !state.isOffline &&
+        !state.pairingRevoked &&
+        state.peerOfflineReason == null &&
+        state.peerPresence is! PresenceOffline;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -131,6 +143,7 @@ class ChatPage extends StatelessWidget {
     // Plan-18 follow-up — when the agent is currently producing a
     // response, show "working…" instead of online/offline.
     final isWorking = vm.isWorking;
+    final actionsEnabled = _canRunActions(state);
 
     // Plan/24-fix-title: pass the navigation hint into the helpers so
     // either line of the AppBar (room or peer) shows it instead of
@@ -210,27 +223,91 @@ class ChatPage extends StatelessWidget {
                             : isOnline
                             ? 'online'
                             : 'offline';
-                        return Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 7,
-                              height: 7,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: color,
+                        final rawModel =
+                            (room?.model ?? initialModel)?.trim();
+                        final hasModel =
+                            rawModel != null && rawModel.isNotEmpty;
+                        final canTap = actionsEnabled && !isWorking;
+                        final tooltipMessage = hasModel
+                            ? (canTap
+                                  ? '$label · $rawModel (tap for quick actions)'
+                                  : '$label · $rawModel')
+                            : label;
+
+                        final pill = Container(
+                          key: const Key('chat-status-pill'),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 5,
+                            vertical: 1,
+                          ),
+                          decoration: BoxDecoration(
+                            color: colors.surface,
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: colors.border, width: 1),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 7,
+                                height: 7,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: color,
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              label,
-                              style: TextStyle(
-                                fontFamily: kMonoFamily,
-                                fontSize: 10,
-                                color: color,
+                              const SizedBox(width: 4),
+                              Text(
+                                label,
+                                style: TextStyle(
+                                  fontFamily: kMonoFamily,
+                                  fontSize: 10,
+                                  color: color,
+                                ),
                               ),
-                            ),
-                          ],
+                              if (hasModel) ...[
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                  ),
+                                  child: Text(
+                                    '·',
+                                    style: TextStyle(
+                                      fontFamily: kMonoFamily,
+                                      fontSize: 10,
+                                      color: colors.muted,
+                                    ),
+                                  ),
+                                ),
+                                ConstrainedBox(
+                                  constraints: const BoxConstraints(
+                                    maxWidth: 180,
+                                  ),
+                                  child: Text(
+                                    rawModel,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: context.typo.monoSmall.copyWith(
+                                      fontSize: 9.5,
+                                      fontWeight: FontWeight.w600,
+                                      color: colors.text,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        );
+
+                        return Tooltip(
+                          message: tooltipMessage,
+                          child: InkWell(
+                            onTap: canTap
+                                ? () => showQuickActionsSheet(context)
+                                : null,
+                            borderRadius: BorderRadius.circular(4),
+                            child: pill,
+                          ),
                         );
                       },
                     ),

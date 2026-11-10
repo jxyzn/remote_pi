@@ -148,4 +148,59 @@ void main() {
       conn.dispose();
     },
   );
+
+  testWidgets(
+    'Status display shows currently selected model in AppBar',
+    (tester) async {
+      final conn = ConnectionManager(
+        factory: (_, _) async => _FakeChannel(),
+        storage: _FakeStorage(),
+      );
+      final boxes = LocalBoxes();
+      final sync = SyncService(conn, boxes);
+      final read = SessionReadRepository(boxes);
+      final prefs = Preferences(_FakeSecureStorage());
+      final actions = ActionsRepository(conn);
+      final vm = ChatViewModel(read, sync, conn, prefs, _FakeStorage());
+      final voice = VoiceInputViewModel(_FakeSpeech());
+      final attach = AttachmentViewModel(_FakePicker(), actions);
+      final sel = SessionSelection();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MultiProvider(
+            providers: [
+              ChangeNotifierProvider<ChatViewModel>.value(value: vm),
+              ChangeNotifierProvider<VoiceInputViewModel>.value(value: voice),
+              ChangeNotifierProvider<AttachmentViewModel>.value(value: attach),
+              ChangeNotifierProvider<Preferences>.value(value: prefs),
+              ChangeNotifierProvider<SessionSelection>.value(value: sel),
+              Provider<IActionsRepository>.value(value: actions),
+            ],
+            child: const ChatPage(
+              initialTitle: 'My Project',
+              initialDevice: 'MacBook Pro',
+              initialModel: 'qwen3.8-27b',
+              initialOnline: true,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      // Status pill displays the model alongside the online indicator
+      expect(find.byKey(const Key('chat-status-pill')), findsOneWidget);
+      expect(find.text('online'), findsOneWidget);
+      expect(find.text('qwen3.8-27b'), findsOneWidget);
+
+      await tester.pumpWidget(const SizedBox());
+      vm.dispose();
+      attach.dispose();
+      voice.dispose();
+      actions.dispose();
+      sync.dispose();
+      sel.dispose();
+      conn.dispose();
+    },
+  );
 }
