@@ -230,5 +230,59 @@ void main() {
             reason: 'when QR lacks r=, persist currentRelayUrl');
       },
     );
+
+    test(
+      'completes idempotently via fallback ping/pong when host is already '
+      'attached and ignores pair_request',
+      () async {
+        final q1 = _Q();
+        final q2 = _Q();
+        final pi = _MemTransport(send: q1, recv: q2);
+        final app = _MemTransport(send: q2, recv: q1);
+        final qr = QrPairPayload(
+          token: 'AAAAAAAAAAAAAAAAAAAAAA',
+          epk: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+          sessionName: 'dev-box',
+          roomId: 'room-dev',
+        );
+        final storage = _FakeStorage();
+
+        // Simulate an already-attached host: drops pair_request, replies pong
+        // when the fallback ping arrives.
+        unawaited(() async {
+          final firstRaw = await pi.receive();
+          final firstMsg =
+              jsonDecode(utf8.decode(firstRaw)) as Map<String, dynamic>;
+          expect(firstMsg['type'], 'pair_request');
+          // Ignore pair_request; wait for fallback ping.
+          final secondRaw = await pi.receive();
+          final secondMsg =
+              jsonDecode(utf8.decode(secondRaw)) as Map<String, dynamic>;
+          expect(secondMsg['type'], 'ping');
+          await pi.send(
+            Uint8List.fromList(
+              utf8.encode(
+                jsonEncode({
+                  'type': 'pong',
+                  'in_reply_to': secondMsg['id'],
+                }),
+              ),
+            ),
+          );
+        }());
+
+        final result = await performPairing(
+          qr: qr,
+          transport: app,
+          storage: storage,
+          deviceName: 'phone',
+          currentRelayUrl: 'https://relay.example.com/remote-pi',
+        );
+        expect(result.peer.sessionName, 'dev-box');
+        expect(result.peer.roomId, 'room-dev');
+        expect(result.peer.relayUrl, 'https://relay.example.com/remote-pi');
+        expect(storage.saved, hasLength(1));
+      },
+    );
   });
 }
