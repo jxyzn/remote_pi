@@ -21,7 +21,7 @@ import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
-class ChatPage extends StatelessWidget {
+class ChatPage extends StatefulWidget {
   /// Plan/24-fix-title: optional title hint passed via `go_router`
   /// `extra` from the Home tile. Used as the peer-label fallback in
   /// the AppBar so the user sees the right name *immediately* on
@@ -55,6 +55,35 @@ class ChatPage extends StatelessWidget {
     this.initialOnline = false,
     this.showBack = true,
   });
+
+  @override
+  State<ChatPage> createState() => _ChatPageState();
+}
+
+class _ChatPageState extends State<ChatPage> {
+  final Set<String> _expandedToolCallIds = <String>{};
+  final Set<String> _collapsedToolCallIds = <String>{};
+  SessionVerbosity? _lastVerbosity;
+
+  void _onToolExpandedChanged(String toolId, bool expanded) {
+    setState(() {
+      if (expanded) {
+        _expandedToolCallIds.add(toolId);
+        _collapsedToolCallIds.remove(toolId);
+      } else {
+        _collapsedToolCallIds.add(toolId);
+        _expandedToolCallIds.remove(toolId);
+      }
+    });
+  }
+
+  static bool _canRunActions(ChatState state) {
+    if (state is! ChatReady) return false;
+    return !state.isOffline &&
+        !state.pairingRevoked &&
+        state.peerOfflineReason == null &&
+        state.peerPresence is! PresenceOffline;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -123,7 +152,7 @@ class ChatPage extends StatelessWidget {
     // "reconnecting" on the default runtime. The live signal takes over once
     // resolved.
     final resolved = vm.connectionResolved;
-    final isOnline = resolved ? vm.isRoomLive : initialOnline;
+    final isOnline = resolved ? vm.isRoomLive : widget.initialOnline;
     // Plan-18 follow-up — when the chat is "offline" (WS to relay
     // down or retrying), prefer a "reconectando" amber pill so the
     // user knows it's the relay, not the Pi cwd, that's gone.
@@ -136,11 +165,11 @@ class ChatPage extends StatelessWidget {
     // either line of the AppBar (room or peer) shows it instead of
     // the generic placeholders when the ViewModel hasn't finished
     // bootstrapping yet.
-    final roomName = _roomDisplayName(room, state, initialTitle);
+    final roomName = _roomDisplayName(room, state, widget.initialTitle);
     // Plan/32g — line 2 (device) falls back to `initialDevice` (the Mac name
     // Home passed), NOT `initialTitle` (the room name) — so it shows the right
     // device from frame 1 and doesn't flip when the PeerRecord loads.
-    final peerLabel = _peerDisplayName(peer, initialDevice);
+    final peerLabel = _peerDisplayName(peer, widget.initialDevice);
 
     return Container(
       height: 56,
@@ -151,7 +180,7 @@ class ChatPage extends StatelessWidget {
       ),
       child: Row(
         children: [
-          if (showBack)
+          if (widget.showBack)
             IconButton(
               icon: Icon(LucideIcons.chevronLeft, size: 18, color: colors.text),
               tooltip: 'Back',
@@ -366,7 +395,14 @@ class ChatPage extends StatelessWidget {
       s.length <= max ? s : '${s.substring(0, max - 1)}…';
 
   Widget _buildBody(BuildContext context, ChatState state, ChatViewModel vm) {
-    final hideToolCalls = context.watch<Preferences>().hideToolCalls;
+    final prefs = context.watch<Preferences>();
+    final hideToolCalls = prefs.hideToolCalls;
+    final verbosity = prefs.sessionVerbosity;
+    if (_lastVerbosity != verbosity) {
+      _lastVerbosity = verbosity;
+      _expandedToolCallIds.clear();
+      _collapsedToolCallIds.clear();
+    }
     return switch (state) {
       // Edge case: opened /chat without a peer (e.g. peer revoked while
       // user was here). The chat is not the place to pair — render
@@ -402,6 +438,10 @@ class ChatPage extends StatelessWidget {
         return _MessageList(
           messages: visible,
           streaming: streaming,
+          verbosity: verbosity,
+          expandedToolCallIds: _expandedToolCallIds,
+          collapsedToolCallIds: _collapsedToolCallIds,
+          onToolExpandedChanged: _onToolExpandedChanged,
           onDecide: (id, decision) => vm.approveTool(id, decision),
         );
       }(),
@@ -410,11 +450,6 @@ class ChatPage extends StatelessWidget {
 
   Widget _buildInput(BuildContext context, ChatState state, ChatViewModel vm) {
     final isReady = state is ChatReady;
-    final isOffline = isReady && state.isOffline;
-    final isRevoked = isReady && state.pairingRevoked;
-    final isPeerOffline = isReady && state.peerOfflineReason != null;
-    // Live relay-reported offline (no `bye`): Pi is just not reachable.
-    final isPresenceOffline = isReady && state.peerPresence is PresenceOffline;
     // Plan/31 — the composer is locked + the send button becomes "stop" for
     // the WHOLE working turn (send/echo → agent_done), not just the narrow
     // token-streaming window. Driven by the broad working signal so it matches
@@ -425,20 +460,10 @@ class ChatPage extends StatelessWidget {
     // entry point when the chat input itself is enabled. Hiding the
     // ⚙ button on offline avoids a tap that would just throw inside
     // the sheet.
-    final actionsEnabled =
-        isReady &&
-        !isOffline &&
-        !isRevoked &&
-        !isPeerOffline &&
-        !isPresenceOffline;
+    final actionsEnabled = _canRunActions(state);
 
     return InputBar(
-      disabled:
-          !isReady ||
-          isOffline ||
-          isRevoked ||
-          isPeerOffline ||
-          isPresenceOffline,
+      disabled: !actionsEnabled,
       streaming: isWorking,
       onCancel: cancelId != null ? () => vm.cancel(cancelId) : null,
       onOpenQuickActions: actionsEnabled
@@ -566,17 +591,26 @@ class ChatPage extends StatelessWidget {
 class _MessageList extends StatelessWidget {
   final List<ChatMessage> messages;
   final StreamingMessage? streaming;
+  final SessionVerbosity verbosity;
+  final Set<String> expandedToolCallIds;
+  final Set<String> collapsedToolCallIds;
+  final void Function(String toolId, bool expanded)? onToolExpandedChanged;
   final void Function(String, ApproveDecision) onDecide;
 
   const _MessageList({
     required this.messages,
     required this.streaming,
+    this.verbosity = SessionVerbosity.defaultLevel,
+    this.expandedToolCallIds = const {},
+    this.collapsedToolCallIds = const {},
+    this.onToolExpandedChanged,
     required this.onDecide,
   });
 
   @override
   Widget build(BuildContext context) {
     final itemCount = messages.length + (streaming != null ? 1 : 0);
+    final mostRecentToolId = _findMostRecentToolCallId(messages);
 
     // `reverse: true` anchors the viewport to the bottom (offset 0 = newest)
     // and keeps it there as content arrives — no manual scroll-to-bottom is
@@ -602,17 +636,41 @@ class _MessageList extends StatelessWidget {
         }
         final msgIdx = messages.length - 1 - (i - (streaming != null ? 1 : 0));
         final msg = messages[msgIdx];
+        final userExpanded = expandedToolCallIds.contains(msg.id)
+            ? true
+            : collapsedToolCallIds.contains(msg.id)
+            ? false
+            : null;
         return KeyedSubtree(
           key: ValueKey(msg.id),
           child: switch (msg) {
             UserMsg() => UserBubble(msg),
             AssistantMsg() => AssistantBubble(msg),
-            ToolEvent() => ToolRequestCard(tool: msg, onDecide: onDecide),
+            ToolEvent() => ToolRequestCard(
+              tool: msg,
+              verbosity: verbosity,
+              isRecent: msg.id == mostRecentToolId,
+              initiallyExpanded: userExpanded,
+              onExpandedChanged: onToolExpandedChanged != null
+                  ? (expanded) => onToolExpandedChanged!(msg.id, expanded)
+                  : null,
+              onDecide: onDecide,
+            ),
             CompactionMsg() => CompactionBubble(msg),
           },
         );
       },
     );
+  }
+
+  /// Identifies the ID of the single most recent tool call in the session.
+  static String? _findMostRecentToolCallId(List<ChatMessage> messages) {
+    for (int i = messages.length - 1; i >= 0; i--) {
+      if (messages[i] is ToolEvent) {
+        return messages[i].id;
+      }
+    }
+    return null;
   }
 }
 
