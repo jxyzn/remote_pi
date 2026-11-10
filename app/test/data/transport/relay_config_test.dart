@@ -55,6 +55,11 @@ void main() {
       expect(isValidRelayUrl('http://127.0.0.1:8080'), isTrue);
       expect(isValidRelayUrl('https://relay.example.com'), isTrue);
       expect(isValidRelayUrl('https://relay-rp1.jacobmoura.work'), isTrue);
+      expect(isValidRelayUrl('relay.example.com/remote-pi'), isTrue);
+      expect(normalizeRelayUrl('relay.example.com/remote-pi'),
+          'https://relay.example.com/remote-pi');
+      expect(normalizeRelayUrl('https://relay.example.com/remote-pi/'),
+          'https://relay.example.com/remote-pi');
     });
 
     test('rejects ws:// and wss:// — those are conversions only', () {
