@@ -6,6 +6,7 @@ import 'package:app/data/sync/sync_service.dart';
 import 'package:app/data/transport/connection_manager.dart';
 import 'package:app/pairing/owner_identity_bridge.dart';
 import 'package:app/pairing/storage.dart';
+import 'package:app/pairing/storage_platform_fallback.dart';
 import 'package:app/routing/adaptive.dart';
 import 'package:app/routing/app_router.dart';
 import 'package:app/ui/core/themes/themes.dart';
@@ -14,6 +15,7 @@ import 'package:provider/provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  initPlatformStorageFallback();
   // Plan 31 — open the v2 SSOT boxes + WIPE the volatile runtime box BEFORE
   // anything subscribes (#3 / Risk 2).
   await LocalBoxes.init();

@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:io' show Platform;
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:ui' show PlatformDispatcher;
 
 import 'package:app/domain/contracts/contracts.dart';
@@ -249,7 +251,7 @@ class SoundLevelScale {
 
   /// The scale matching the native plugin on the current platform.
   factory SoundLevelScale.forPlatform() =>
-      (Platform.isIOS || Platform.isMacOS) ? darwin : android;
+      (!kIsWeb && (Platform.isIOS || Platform.isMacOS)) ? darwin : android;
 
   /// Clamp [level] into `[min, max]` and scale to `0..1`. Tolerates `±∞`/`NaN`
   /// (a fully silent buffer yields `log10(0) = -∞`): both clamp to an endpoint.

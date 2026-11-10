@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:app/data/actions/actions_repository.dart';
 import 'package:app/data/images/image_picker_service.dart';
@@ -41,6 +42,10 @@ class AttachmentViewModel extends ViewModel<AttachmentState> {
 
   Future<void> pickFromCamera() => _pick(_picker.pickFromCamera);
   Future<void> pickFromGallery() => _pick(_picker.pickFromGallery);
+
+  /// Attaches an image from raw bytes (drag & drop or clipboard paste).
+  Future<void> attachFromBytes(Uint8List bytes, [String? mime]) =>
+      _pick(() => _picker.processImageBytes(bytes, mime));
 
   Future<void> _pick(Future<PickedImage?> Function() pick) async {
     if (state is AttachmentPicking) return;
@@ -98,12 +103,29 @@ class AttachmentViewModel extends ViewModel<AttachmentState> {
 
   bool? _resolveVision(ModelsCatalogue catalogue) {
     final current = catalogue.current;
-    if (current != null) return current.vision;
+    if (current != null) {
+      if (current.vision) return true;
+      // If current reported false, check if catalogue base model has vision
+      // (handles suffix discrepancies like :medium / :low).
+      final baseId = current.id.split(':').first;
+      for (final m in catalogue.models) {
+        if (m.id == current.id || m.id == baseId || m.name == current.name) {
+          if (m.vision) return true;
+        }
+      }
+      return current.vision;
+    }
     // No explicit current — match the active room's model name.
     final name = _actions.activeRoomMeta.model;
     if (name != null) {
+      final baseName = name.split(':').first;
       for (final m in catalogue.models) {
-        if (m.name == name) return m.vision;
+        if (m.name == name ||
+            m.id == name ||
+            m.name == baseName ||
+            m.id == baseName) {
+          return m.vision;
+        }
       }
     }
     return null;
