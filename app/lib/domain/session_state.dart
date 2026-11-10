@@ -8,6 +8,22 @@
 sealed class ChatMessage {
   final String id;
   const ChatMessage({required this.id});
+
+  /// True when this message matches the case-insensitive search [query].
+  bool matchesSearchQuery(String query) {
+    final q = query.trim().toLowerCase();
+    if (q.isEmpty) return false;
+    return switch (this) {
+      UserMsg(:final text) => text.toLowerCase().contains(q),
+      AssistantMsg(:final text) => text.toLowerCase().contains(q),
+      ToolEvent(:final tool, :final args, :final result, :final error) =>
+        tool.toLowerCase().contains(q) ||
+        (args != null && args.toString().toLowerCase().contains(q)) ||
+        (result != null && result.toString().toLowerCase().contains(q)) ||
+        (error != null && error.toLowerCase().contains(q)),
+      CompactionMsg(:final summary) => summary.toLowerCase().contains(q),
+    };
+  }
 }
 
 /// Plan/24-fix-app-source-of-truth: every UserMsg is tagged with the
