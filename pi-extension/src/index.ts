@@ -4074,8 +4074,8 @@ function _wakeAgent(
   }
   try {
     const options = steeringBehavior
-      ? ({ deliverAs: steeringBehavior })
-      : undefined;
+      ? ({ deliverAs: steeringBehavior, expandPromptTemplates: true })
+      : ({ expandPromptTemplates: true });
     _pi.sendUserMessage(content, options);
     return { ok: true };
   } catch (err) {
@@ -4458,6 +4458,23 @@ export function _routeClientMessageFrom(
           const detail = error instanceof Error ? error.message : String(error);
           console.error(`[remote-pi] failed delivering image message id=${msg.id}: ${detail}`);
         });
+        break;
+      }
+
+      const trimmedCmd = typeof msg.text === "string" ? msg.text.trim() : "";
+      if (/^\/(new|reset|clear)$/i.test(trimmedCmd)) {
+        sender.send({ type: "cancelled", in_reply_to: msg.id, target_id: msg.id });
+        _routeClientMessageFrom(sender, { type: "session_new", id: msg.id }, ctx);
+        break;
+      }
+      if (/^\/compact(?:\s+.*)?$/i.test(trimmedCmd)) {
+        sender.send({ type: "cancelled", in_reply_to: msg.id, target_id: msg.id });
+        _routeClientMessageFrom(sender, { type: "session_compact", id: msg.id }, ctx);
+        break;
+      }
+      if (/^\/reload$/i.test(trimmedCmd) && process.env["REMOTE_PI_DAEMON"] === "1") {
+        _echoUserMessage(msg, shouldSteer);
+        setTimeout(() => process.exit(1), 100);
         break;
       }
 
