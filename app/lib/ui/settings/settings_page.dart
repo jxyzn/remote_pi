@@ -84,23 +84,25 @@ class _AddPairingButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final typo = context.typo;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 12, 18, 16),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
       child: OutlinedButton.icon(
         onPressed: () => context.push('/pair'),
         style: OutlinedButton.styleFrom(
           foregroundColor: colors.accent,
-          side: BorderSide(color: colors.border),
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          backgroundColor: colors.surface,
+          side: BorderSide(color: colors.border, width: 1.5),
+          padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 14),
           shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(6)),
+            borderRadius: BorderRadius.all(Radius.circular(8)),
           ),
           minimumSize: const Size.fromHeight(0),
         ),
         icon: const Icon(LucideIcons.scanQrCode, size: 18),
         label: Text(
           'Add new pairing',
-          style: const TextStyle(fontFamily: kMonoFamily, fontSize: 13),
+          style: typo.sansTitle.copyWith(fontSize: 13.5, color: colors.accent),
         ),
       ),
     );
@@ -135,15 +137,20 @@ class _RelaySectionState extends State<_RelaySection> {
     final messenger = ScaffoldMessenger.of(context);
     final err = await vm.saveRelayUrl(_ctrl.text);
     if (!mounted) return;
-    setState(() => _error = err);
+    setState(() {
+      _error = err;
+      if (err == null) {
+        _ctrl.text = vm.relayUrlOverride;
+      }
+    });
     if (err == null) {
       messenger.showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
             'Relay updated',
-            style: TextStyle(fontFamily: kMonoFamily),
+            style: context.typo.sansBody,
           ),
-          duration: Duration(seconds: 2),
+          duration: const Duration(seconds: 2),
         ),
       );
     }
@@ -153,93 +160,88 @@ class _RelaySectionState extends State<_RelaySection> {
   Widget build(BuildContext context) {
     final vm = context.watch<SettingsViewModel>();
     final colors = context.colors;
+    final typo = context.typo;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const _SectionHeader('Relay'),
         Padding(
-          padding: const EdgeInsets.fromLTRB(18, 4, 18, 8),
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               TextField(
                 controller: _ctrl,
-                style: context.typo.mono.copyWith(
+                keyboardType: TextInputType.url,
+                autocorrect: false,
+                enableSuggestions: false,
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _save(),
+                style: typo.mono.copyWith(
                   fontSize: 13,
                   color: colors.text,
                 ),
                 decoration: InputDecoration(
                   isDense: true,
                   hintText: 'https://my-relay.example.com',
-                  hintStyle: context.typo.mono.copyWith(
+                  hintStyle: typo.mono.copyWith(
                     color: colors.muted,
                     fontSize: 12,
                   ),
+                  suffixIcon: IconButton(
+                    icon: Icon(LucideIcons.x, size: 15, color: colors.muted2),
+                    tooltip: 'Clear URL',
+                    onPressed: () => _ctrl.clear(),
+                  ),
                   helperText: 'Current: ${vm.effectiveRelayUrl}',
-                  helperStyle: context.typo.mono.copyWith(
-                    fontSize: 10,
-                    color: colors.muted,
+                  helperStyle: typo.monoSmall.copyWith(
+                    fontSize: 10.5,
+                    color: colors.muted2,
                   ),
                   errorText: _error,
-                  errorStyle: context.typo.mono.copyWith(
-                    fontSize: 10,
+                  errorStyle: typo.sansSmall.copyWith(
+                    fontSize: 11,
                     color: colors.error,
                   ),
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 10,
-                    vertical: 10,
+                    vertical: 9,
                   ),
                   enabledBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: colors.border),
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: colors.border, width: 1.5),
                   ),
                   focusedBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: colors.accent),
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: colors.accent, width: 2.0),
                   ),
                 ),
               ),
-              const SizedBox(height: 10),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    FilledButton(
-                      onPressed: _save,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: colors.accent,
-                        foregroundColor: colors.onAccent,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 18,
-                          vertical: 10,
-                        ),
-                        shape: const RoundedRectangleBorder(
-                          borderRadius: BorderRadius.all(Radius.circular(6)),
-                        ),
-                      ),
-                      child: Text(
-                        'Save',
-                        style: const TextStyle(
-                          fontFamily: kMonoFamily,
-                          fontSize: 13,
-                        ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 10,
+                runSpacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  FilledButton(
+                    onPressed: _save,
+                    child: const Text('Save'),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      _ctrl.text = kDefaultRelayUrl;
+                      _save();
+                    },
+                    child: Text(
+                      'Use default Relay',
+                      style: typo.sansBody.copyWith(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: colors.accent,
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    TextButton(
-                      onPressed: () {
-                        _ctrl.text = kDefaultRelayUrl;
-                        _save();
-                      },
-                      child: Text(
-                        'Use default Relay',
-                        style: const TextStyle(
-                          fontFamily: kMonoFamily,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -256,37 +258,68 @@ class _DisplaySection extends StatelessWidget {
   Widget build(BuildContext context) {
     final prefs = context.watch<Preferences>();
     final colors = context.colors;
+    final typo = context.typo;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const _SectionHeader('Display'),
+        // Theme preset — Classic (default monochrome) vs PICO-8 (fantasy console).
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Theme style',
+                style: typo.sansTitle.copyWith(fontSize: 13.5),
+              ),
+              const SizedBox(height: 6),
+              SizedBox(
+                width: double.infinity,
+                child: SegmentedButton<AppThemePreset>(
+                  showSelectedIcon: false,
+                  segments: [
+                    for (final preset in AppThemePreset.values)
+                      ButtonSegment(value: preset, label: Text(preset.label)),
+                  ],
+                  selected: {prefs.themePreset},
+                  onSelectionChanged: (s) => prefs.setThemePreset(s.first),
+                ),
+              ),
+            ],
+          ),
+        ),
         // Theme mode — System follows the OS; Light / Dark pin it.
         Padding(
-          padding: const EdgeInsets.fromLTRB(18, 4, 18, 4),
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 'Theme',
-                style: context.typo.sansBody.copyWith(color: colors.text),
+                style: typo.sansTitle.copyWith(fontSize: 13.5),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 6),
               SizedBox(
                 width: double.infinity,
                 child: SegmentedButton<ThemeMode>(
                   showSelectedIcon: false,
-                  segments: const [
-                    ButtonSegment(
+                  segments: [
+                    const ButtonSegment(
                       value: ThemeMode.system,
                       label: Text('System'),
                     ),
                     ButtonSegment(
                       value: ThemeMode.light,
-                      label: Text('Light'),
+                      label: Text(
+                        prefs.themePreset.isPico8 ? 'Arcade Light' : 'Light',
+                      ),
                     ),
                     ButtonSegment(
                       value: ThemeMode.dark,
-                      label: Text('Dark'),
+                      label: Text(
+                        prefs.themePreset.isPico8 ? 'Console Dark' : 'Dark',
+                      ),
                     ),
                   ],
                   selected: {prefs.themeMode},
@@ -296,19 +329,45 @@ class _DisplaySection extends StatelessWidget {
             ],
           ),
         ),
+        // Retro header & badge typography — Arcade Pixel (Silkscreen) vs Clean Sans (Space Grotesk).
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Header & badge font',
+                style: typo.sansTitle.copyWith(fontSize: 13.5),
+              ),
+              const SizedBox(height: 6),
+              SizedBox(
+                width: double.infinity,
+                child: SegmentedButton<AppRetroFontMode>(
+                  showSelectedIcon: false,
+                  segments: [
+                    for (final mode in AppRetroFontMode.values)
+                      ButtonSegment(value: mode, label: Text(mode.label)),
+                  ],
+                  selected: {prefs.retroFontMode},
+                  onSelectionChanged: (s) => prefs.setRetroFontMode(s.first),
+                ),
+              ),
+            ],
+          ),
+        ),
         // Text size — the app hardcodes its font sizes and Flutter can't read
         // iOS's per-app Text Size, so without this the only way to enlarge chat
         // text is the OS-wide accessibility setting (issue #114).
         Padding(
-          padding: const EdgeInsets.fromLTRB(18, 12, 18, 4),
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 'Text size',
-                style: context.typo.sansBody.copyWith(color: colors.text),
+                style: typo.sansTitle.copyWith(fontSize: 13.5),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 6),
               SizedBox(
                 width: double.infinity,
                 child: SegmentedButton<AppFontScale>(
@@ -325,23 +384,21 @@ class _DisplaySection extends StatelessWidget {
           ),
         ),
         SwitchListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 18),
+          dense: true,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16),
           activeThumbColor: colors.accent,
           title: Text(
             'Hide tool calls in chat',
-            style: context.typo.sansBody.copyWith(color: colors.text),
+            style: typo.sansTitle.copyWith(fontSize: 13.5),
           ),
           subtitle: Text(
             'Only show your messages and the assistant replies.',
-            style: context.typo.sansBody.copyWith(
-              color: colors.muted,
-              fontSize: 12,
-            ),
+            style: typo.sansSmall.copyWith(color: colors.muted2),
           ),
           value: prefs.hideToolCalls,
           onChanged: (v) => prefs.setHideToolCalls(v),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 4),
       ],
     );
   }
@@ -353,16 +410,29 @@ class _SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colors;
+    final typo = context.typo;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 8),
-      child: Text(
-        label.toUpperCase(),
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: context.colors.muted,
-          letterSpacing: 1.4,
-        ),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: Row(
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(
+              color: colors.highlight,
+              borderRadius: BorderRadius.circular(1.5),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label.toUpperCase(),
+            style: typo.badge.copyWith(
+              color: colors.muted2,
+              letterSpacing: 0.9,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -374,29 +444,26 @@ class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final typo = context.typo;
     return Padding(
-      padding: const EdgeInsets.all(32),
+      padding: const EdgeInsets.all(24),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(LucideIcons.monitorSmartphone, color: colors.muted, size: 40),
-          const SizedBox(height: 12),
+          Icon(LucideIcons.monitorSmartphone, color: colors.muted, size: 36),
+          const SizedBox(height: 10),
           Text(
             'No pairings yet',
-            style: TextStyle(color: colors.muted2, fontSize: 14),
+            style: typo.sansTitle.copyWith(color: colors.muted2),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           Text(
-            'Tap + to pair a new Mac.',
-            style: TextStyle(color: colors.muted, fontSize: 12),
+            'Tap + to pair a new host.',
+            style: typo.sansSmall.copyWith(color: colors.muted),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
           FilledButton.icon(
             onPressed: () => context.push('/pair'),
-            style: FilledButton.styleFrom(
-              backgroundColor: colors.accent,
-              foregroundColor: colors.onAccent,
-            ),
             icon: const Icon(LucideIcons.scanQrCode, size: 18),
             label: const Text('Scan QR'),
           ),

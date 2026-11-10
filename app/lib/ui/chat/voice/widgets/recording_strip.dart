@@ -207,17 +207,17 @@ class _SlideToCancelHint extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final typo = context.typo;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(LucideIcons.chevronLeft, size: 14, color: colors.muted),
+        Icon(LucideIcons.chevronLeft, size: 14, color: colors.muted2),
         const SizedBox(width: 2),
         Text(
           'slide to cancel',
-          style: TextStyle(
-            fontFamily: kMonoFamily,
-            fontSize: 11,
-            color: colors.muted,
+          style: typo.sansSmall.copyWith(
+            fontSize: 11.5,
+            color: colors.muted2,
           ),
         ),
       ],
@@ -229,6 +229,7 @@ class _CancelHint extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final typo = context.typo;
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
@@ -236,11 +237,10 @@ class _CancelHint extends StatelessWidget {
         const SizedBox(width: 6),
         Text(
           'release to cancel',
-          style: TextStyle(
-            fontFamily: kMonoFamily,
+          style: typo.sansSmall.copyWith(
             fontSize: 12,
             color: colors.error,
-            fontWeight: FontWeight.w500,
+            fontWeight: FontWeight.w700,
           ),
         ),
       ],

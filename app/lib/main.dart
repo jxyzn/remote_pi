@@ -95,8 +95,14 @@ class _RemotePiAppState extends State<RemotePiApp> with WidgetsBindingObserver {
       child: Consumer<Preferences>(
         builder: (context, prefs, _) => MaterialApp.router(
           title: 'Remote Pi',
-          theme: buildLightTheme(),
-          darkTheme: buildDarkTheme(),
+          theme: buildLightTheme(
+            preset: prefs.themePreset,
+            fontMode: prefs.retroFontMode,
+          ),
+          darkTheme: buildDarkTheme(
+            preset: prefs.themePreset,
+            fontMode: prefs.retroFontMode,
+          ),
           themeMode: prefs.themeMode,
           routerConfig: _router,
           debugShowCheckedModeBanner: false,

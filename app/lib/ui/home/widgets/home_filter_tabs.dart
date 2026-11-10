@@ -27,12 +27,13 @@ class HomeFilterTabs extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colors;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 10),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
       child: Container(
         decoration: BoxDecoration(
           color: colors.surface,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: colors.border),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: colors.border, width: 1.5),
+          boxShadow: colors.retroShadowSm,
         ),
         padding: const EdgeInsets.all(3),
         child: Row(
@@ -53,18 +54,22 @@ class HomeFilterTabs extends StatelessWidget {
     int count,
   ) {
     final colors = context.colors;
+    final typo = context.typo;
     final selected = filter == value;
     return Expanded(
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () => onSelected(value),
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
+          duration: const Duration(milliseconds: 140),
           curve: Curves.easeOut,
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
           decoration: BoxDecoration(
             color: selected ? colors.accent : Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(5),
+            border: selected
+                ? Border.all(color: colors.border, width: 1.2)
+                : null,
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -74,22 +79,29 @@ class HomeFilterTabs extends StatelessWidget {
                   label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontFamily: kMonoFamily,
+                  style: typo.sansBody.copyWith(
                     fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
-                    color: selected ? colors.onAccent : colors.muted,
+                    fontWeight: FontWeight.w700,
+                    color: selected ? colors.onAccent : colors.muted2,
                   ),
                 ),
               ),
-              const SizedBox(width: 6),
-              Text(
-                '$count',
-                style: TextStyle(
-                  fontFamily: kMonoFamily,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: selected ? colors.onAccent : colors.muted2,
+              const SizedBox(width: 5),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                decoration: BoxDecoration(
+                  color: selected
+                      ? colors.onAccent.withValues(alpha: 0.22)
+                      : colors.surface2,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  '$count',
+                  style: typo.monoSmall.copyWith(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                    color: selected ? colors.onAccent : colors.muted2,
+                  ),
                 ),
               ),
             ],
@@ -113,6 +125,7 @@ class HomeFilterEmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final typo = context.typo;
     final (String title, String subtitle) = switch (filter) {
       HomeFilter.online => (
         'No sessions online',
@@ -130,37 +143,35 @@ class HomeFilterEmptyState extends StatelessWidget {
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: kMaxContentWidth),
-        child: Opacity(
-          opacity: 0.35,
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(LucideIcons.moon, color: colors.muted, size: 56),
-                const SizedBox(height: 18),
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontFamily: kMonoFamily,
-                    color: colors.muted2,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                  ),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: colors.surface,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: colors.border, width: 1.5),
+                  boxShadow: colors.retroShadowSm,
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  subtitle,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontFamily: kMonoFamily,
-                    color: colors.muted,
-                    fontSize: 11,
-                    height: 1.4,
-                  ),
-                ),
-              ],
-            ),
+                alignment: Alignment.center,
+                child: Icon(LucideIcons.moon, color: colors.muted2, size: 24),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                title,
+                style: typo.sansTitle.copyWith(color: colors.text),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                textAlign: TextAlign.center,
+                style: typo.sansSmall.copyWith(color: colors.muted2),
+              ),
+            ],
           ),
         ),
       ),

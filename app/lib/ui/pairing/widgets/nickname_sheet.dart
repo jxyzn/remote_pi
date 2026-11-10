@@ -84,13 +84,14 @@ class _NicknameSheetState extends State<_NicknameSheet> {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final typo = context.typo;
     final viewInsets = MediaQuery.of(context).viewInsets;
     return Padding(
       padding: EdgeInsets.only(bottom: viewInsets.bottom),
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -99,7 +100,7 @@ class _NicknameSheetState extends State<_NicknameSheet> {
                 child: Container(
                   width: 36,
                   height: 4,
-                  margin: const EdgeInsets.only(bottom: 18),
+                  margin: const EdgeInsets.only(bottom: 14),
                   decoration: BoxDecoration(
                     color: colors.border,
                     borderRadius: BorderRadius.circular(2),
@@ -107,38 +108,28 @@ class _NicknameSheetState extends State<_NicknameSheet> {
                 ),
               ),
               Text(
-                'Name this PC',
-                style: TextStyle(
-                  color: colors.text,
-                  fontSize: 17,
-                  fontWeight: FontWeight.w600,
-                ),
+                'Name this host',
+                style: typo.display.copyWith(fontSize: 17),
               ),
               const SizedBox(height: 6),
               Text(
-                'Pick a label so this Mac is easy to spot in your list. You can change it later from the home screen.',
-                style: TextStyle(color: colors.muted2, fontSize: 13),
+                'Pick a label so this host is easy to spot in your list. You can change it later from the home screen.',
+                style: typo.sansSmall.copyWith(color: colors.muted2),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
               TextField(
                 key: const Key('nickname-sheet-field'),
                 controller: _controller,
                 autofocus: true,
                 textInputAction: TextInputAction.done,
                 onSubmitted: (_) => _save(),
-                style: TextStyle(color: colors.text, fontFamily: kMonoFamily),
+                style: typo.sansBody.copyWith(color: colors.text),
                 decoration: InputDecoration(
                   hintText: _placeholder,
-                  hintStyle: TextStyle(color: colors.muted),
-                  enabledBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: colors.border),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: colors.accent),
-                  ),
+                  hintStyle: typo.sansBody.copyWith(color: colors.muted),
                 ),
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 16),
               Row(
                 children: [
                   Expanded(
@@ -146,11 +137,11 @@ class _NicknameSheetState extends State<_NicknameSheet> {
                       key: const Key('nickname-sheet-skip'),
                       onPressed: _skip,
                       style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
                       child: Text(
                         'Skip',
-                        style: TextStyle(color: colors.muted),
+                        style: typo.sansBody.copyWith(color: colors.muted2),
                       ),
                     ),
                   ),
@@ -159,11 +150,6 @@ class _NicknameSheetState extends State<_NicknameSheet> {
                     child: FilledButton(
                       key: const Key('nickname-sheet-save'),
                       onPressed: _save,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: colors.accent,
-                        foregroundColor: colors.onAccent,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
                       child: const Text('Save'),
                     ),
                   ),

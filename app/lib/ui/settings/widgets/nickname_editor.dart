@@ -99,7 +99,7 @@ class _NicknameEditorSheetState extends State<_NicknameEditorSheet> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Local only — the Mac is not notified.',
+            'Local only — the host is not notified.',
             style: TextStyle(color: colors.muted, fontSize: 12),
           ),
           const SizedBox(height: 16),
