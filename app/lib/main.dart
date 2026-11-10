@@ -70,6 +70,10 @@ class _RemotePiAppState extends State<RemotePiApp> with WidgetsBindingObserver {
       case AppLifecycleState.paused:
       case AppLifecycleState.hidden:
       case AppLifecycleState.detached:
+        // Clear lingering text field focus on backgrounding/app switcher so
+        // that the IME does not leave an orphaned half-screen window inset
+        // upon resume.
+        FocusManager.instance.primaryFocus?.unfocus();
         meshSync.stopPolling();
     }
   }
