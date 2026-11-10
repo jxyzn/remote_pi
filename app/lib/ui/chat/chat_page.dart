@@ -17,11 +17,12 @@ import 'package:app/ui/chat/widgets/tool_request_card.dart';
 import 'package:app/ui/chat/widgets/extension_ui_sheet.dart';
 import 'package:app_settings/app_settings.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
-class ChatPage extends StatelessWidget {
+class ChatPage extends StatefulWidget {
   /// Plan/24-fix-title: optional title hint passed via `go_router`
   /// `extra` from the Home tile. Used as the peer-label fallback in
   /// the AppBar so the user sees the right name *immediately* on
@@ -57,12 +58,192 @@ class ChatPage extends StatelessWidget {
   });
 
   @override
+  State<ChatPage> createState() => _ChatPageState();
+}
+
+class _ChatPageState extends State<ChatPage> {
+  bool _searchOpen = false;
+  bool _filterOnlyMatches = false;
+  int _activeMatchIndex = 0;
+  final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
+  final ScrollController _scrollController = ScrollController();
+
+  String get _searchQuery => _searchController.text;
+
+  @override
+  void initState() {
+    super.initState();
+    HardwareKeyboard.instance.addHandler(_handleKeyEvent);
+  }
+
+  @override
+  void dispose() {
+    HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
+    _searchController.dispose();
+    _searchFocusNode.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  bool _handleKeyEvent(KeyEvent event) {
+    if (!mounted || !(ModalRoute.of(context)?.isCurrent ?? true)) {
+      return false;
+    }
+    if (event is KeyDownEvent) {
+      final isCtrlOrMeta = HardwareKeyboard.instance.isControlPressed ||
+          HardwareKeyboard.instance.isMetaPressed;
+      if (isCtrlOrMeta && event.logicalKey == LogicalKeyboardKey.keyF) {
+        _toggleSearch();
+        return true;
+      }
+      if (isCtrlOrMeta && event.logicalKey == LogicalKeyboardKey.keyK) {
+        _openQuickActionsIfEnabled();
+        return true;
+      }
+      if (event.logicalKey == LogicalKeyboardKey.escape && _searchOpen) {
+        _closeSearch();
+        return true;
+      }
+    }
+    return false;
+  }
+
+  static bool _isActionsEnabled(ChatState state) {
+    if (state is! ChatReady) return false;
+    return !state.isOffline &&
+        !state.pairingRevoked &&
+        state.peerOfflineReason == null &&
+        state.peerPresence is! PresenceOffline;
+  }
+
+  void _openQuickActionsIfEnabled() {
+    if (!mounted) return;
+    final state = context.read<ChatViewModel>().state;
+    if (_isActionsEnabled(state)) {
+      showQuickActionsSheet(context);
+    }
+  }
+
+  void _openSearch() {
+    setState(() {
+      _searchOpen = true;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_searchFocusNode.canRequestFocus) {
+        _searchFocusNode.requestFocus();
+        _searchController.selection = TextSelection(
+          baseOffset: 0,
+          extentOffset: _searchController.text.length,
+        );
+      }
+    });
+  }
+
+  void _closeSearch() {
+    setState(() {
+      _searchOpen = false;
+      _filterOnlyMatches = false;
+      _searchController.clear();
+      _activeMatchIndex = 0;
+    });
+  }
+
+  void _toggleSearch() {
+    if (_searchOpen) {
+      _closeSearch();
+    } else {
+      _openSearch();
+    }
+  }
+
+  void _nextMatch(
+    int total,
+    List<ChatMessage> visible,
+    List<String> matchingIds,
+  ) {
+    if (total == 0) return;
+    setState(() {
+      _activeMatchIndex = (_activeMatchIndex + 1) % total;
+    });
+    _scrollToActiveMatch(visible, matchingIds[_activeMatchIndex]);
+  }
+
+  void _prevMatch(
+    int total,
+    List<ChatMessage> visible,
+    List<String> matchingIds,
+  ) {
+    if (total == 0) return;
+    setState(() {
+      _activeMatchIndex = (_activeMatchIndex - 1 + total) % total;
+    });
+    _scrollToActiveMatch(visible, matchingIds[_activeMatchIndex]);
+  }
+
+  void _scrollToActiveMatch(List<ChatMessage> visible, String targetId) {
+    final msgIdx = visible.indexWhere((m) => m.id == targetId);
+    if (msgIdx == -1) return;
+    if (!_scrollController.hasClients) return;
+
+    final total = visible.length;
+    if (total <= 1) return;
+
+    final listIdx = total - 1 - msgIdx;
+    final maxExtent = _scrollController.position.maxScrollExtent;
+    if (maxExtent <= 0.0) return;
+
+    final targetOffset = (listIdx / (total - 1)).clamp(0.0, 1.0) * maxExtent;
+    if ((targetOffset - _scrollController.offset).abs() < 1.0) return;
+
+    _scrollController.animateTo(
+      targetOffset,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     final vm = context.watch<ChatViewModel>();
     final state = vm.state;
+    final hideToolCalls = context.watch<Preferences>().hideToolCalls;
+    final colors = context.colors;
+    final typo = context.typo;
+
+    final List<ChatMessage> visibleMessages = switch (state) {
+      ChatReady(:final messages) => hideToolCalls
+          ? messages.where((m) => m is! ToolEvent).toList()
+          : messages,
+      _ => const [],
+    };
+
+    final query = _searchQuery.trim();
+    final matchingIds = <String>[];
+    final matchedIdSet = <String>{};
+    if (query.isNotEmpty) {
+      for (final m in visibleMessages) {
+        if (m.matchesSearchQuery(query)) {
+          matchingIds.add(m.id);
+          matchedIdSet.add(m.id);
+        }
+      }
+    }
+
+    final effectiveMatchIndex = matchingIds.isEmpty
+        ? 0
+        : _activeMatchIndex.clamp(0, matchingIds.length - 1);
+    final activeMatchId = matchingIds.isNotEmpty
+        ? matchingIds[effectiveMatchIndex]
+        : null;
+    final filterActive =
+        _searchOpen && _filterOnlyMatches && query.isNotEmpty;
+    final displayedMessages = filterActive
+        ? visibleMessages.where((m) => matchedIdSet.contains(m.id)).toList()
+        : visibleMessages;
 
     final scaffold = Scaffold(
-      backgroundColor: context.colors.bg,
+      backgroundColor: colors.bg,
       body: SafeArea(
         child: Column(
           children: [
@@ -74,11 +255,48 @@ class ChatPage extends StatelessWidget {
             // surfaces those, and stacking duplicates noise the surface.
             if (state is ChatReady && state.pairingRevoked)
               _RevokedBanner(onRePair: () => context.go('/pair')),
-            Expanded(child: _buildBody(context, state, vm)),
+            if (_searchOpen)
+              _buildSearchBar(
+                colors: colors,
+                typo: typo,
+                visibleMessages: visibleMessages,
+                displayedMessages: displayedMessages,
+                matchingIds: matchingIds,
+                effectiveMatchIndex: effectiveMatchIndex,
+                query: query,
+              ),
+            Expanded(
+              child: _buildBody(
+                context,
+                state,
+                vm,
+                visibleMessages,
+                displayedMessages,
+                matchedIdSet,
+                filterActive,
+                query,
+                activeMatchId,
+              ),
+            ),
             _buildInput(context, state, vm),
           ],
         ),
       ),
+    );
+
+    final shortcutWrapped = CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.keyF, control: true):
+            _toggleSearch,
+        const SingleActivator(LogicalKeyboardKey.keyF, meta: true):
+            _toggleSearch,
+        const SingleActivator(LogicalKeyboardKey.keyK, control: true):
+            _openQuickActionsIfEnabled,
+        const SingleActivator(LogicalKeyboardKey.keyK, meta: true):
+            _openQuickActionsIfEnabled,
+        const SingleActivator(LogicalKeyboardKey.escape): _closeSearch,
+      },
+      child: scaffold,
     );
 
     // Plan/57 — an interactive extension_ui_request (ask_user via pi-ask)
@@ -89,10 +307,10 @@ class ChatPage extends StatelessWidget {
     // end.
     final ready = state is ChatReady ? state : null;
     final uiRequest = ready?.pendingUiRequest;
-    if (uiRequest == null) return scaffold;
+    if (uiRequest == null) return shortcutWrapped;
     return Stack(
       children: [
-        scaffold,
+        shortcutWrapped,
         Positioned.fill(
           // Keyed by request id: a new flow must get a fresh State — question
           // ids repeat across flows (e.g. "goal"), so reusing the State would
@@ -105,6 +323,176 @@ class ChatPage extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildSearchBar({
+    required AppColors colors,
+    required AppTypography typo,
+    required List<ChatMessage> visibleMessages,
+    required List<ChatMessage> displayedMessages,
+    required List<String> matchingIds,
+    required int effectiveMatchIndex,
+    required String query,
+  }) {
+    final hasMatches = matchingIds.isNotEmpty;
+    final hasQuery = query.isNotEmpty;
+    final matchText = !hasQuery
+        ? ''
+        : hasMatches
+        ? '${effectiveMatchIndex + 1} of ${matchingIds.length}'
+        : '0 of 0';
+
+    return Container(
+      key: const Key('chat-search-bar'),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border(bottom: BorderSide(color: colors.border)),
+      ),
+      child: Row(
+        children: [
+          Icon(LucideIcons.search, size: 16, color: colors.accent),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              key: const Key('chat-search-textfield'),
+              controller: _searchController,
+              focusNode: _searchFocusNode,
+              autofocus: true,
+              style: typo.sansBody.copyWith(fontSize: 13, color: colors.text),
+              decoration: InputDecoration(
+                hintText: 'Search chat…',
+                hintStyle: typo.sansBody.copyWith(
+                  fontSize: 13,
+                  color: colors.muted,
+                ),
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                filled: false,
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(vertical: 4),
+              ),
+              onChanged: (text) {
+                setState(() {
+                  _activeMatchIndex = 0;
+                });
+                final trimmed = text.trim();
+                if (trimmed.isNotEmpty) {
+                  final newMatches = visibleMessages
+                      .where((m) => m.matchesSearchQuery(trimmed))
+                      .toList();
+                  if (newMatches.isNotEmpty) {
+                    final listForScroll = _filterOnlyMatches
+                        ? newMatches
+                        : visibleMessages;
+                    _scrollToActiveMatch(listForScroll, newMatches.first.id);
+                  }
+                }
+              },
+              onSubmitted: (_) {
+                if (hasMatches) {
+                  _nextMatch(
+                    matchingIds.length,
+                    displayedMessages,
+                    matchingIds,
+                  );
+                }
+              },
+            ),
+          ),
+          if (hasQuery)
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              icon: Icon(LucideIcons.circleX, size: 14, color: colors.muted),
+              tooltip: 'Clear query',
+              onPressed: () {
+                _searchController.clear();
+                setState(() {
+                  _activeMatchIndex = 0;
+                });
+              },
+            ),
+          if (hasQuery)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: hasMatches
+                    ? colors.modelBadgeBg
+                    : colors.error.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(
+                  color: hasMatches ? colors.border : colors.error,
+                ),
+              ),
+              child: Text(
+                matchText,
+                style: typo.monoSmall.copyWith(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: hasMatches ? colors.text : colors.error,
+                ),
+              ),
+            ),
+          const SizedBox(width: 4),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            icon: Icon(
+              _filterOnlyMatches ? LucideIcons.filterX : LucideIcons.filter,
+              size: 16,
+              color: _filterOnlyMatches ? colors.accent : colors.muted2,
+            ),
+            tooltip: _filterOnlyMatches
+                ? 'Show full conversation'
+                : 'Filter to matching messages only',
+            onPressed: () {
+              setState(() {
+                _filterOnlyMatches = !_filterOnlyMatches;
+              });
+            },
+          ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            icon: Icon(
+              LucideIcons.chevronUp,
+              size: 18,
+              color: hasMatches ? colors.text : colors.muted,
+            ),
+            tooltip: 'Previous match',
+            onPressed: hasMatches
+                ? () => _prevMatch(
+                    matchingIds.length,
+                    displayedMessages,
+                    matchingIds,
+                  )
+                : null,
+          ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            icon: Icon(
+              LucideIcons.chevronDown,
+              size: 18,
+              color: hasMatches ? colors.text : colors.muted,
+            ),
+            tooltip: 'Next match (Enter)',
+            onPressed: hasMatches
+                ? () => _nextMatch(
+                    matchingIds.length,
+                    displayedMessages,
+                    matchingIds,
+                  )
+                : null,
+          ),
+          IconButton(
+            key: const Key('chat-search-close-button'),
+            visualDensity: VisualDensity.compact,
+            icon: Icon(LucideIcons.x, size: 18, color: colors.text),
+            tooltip: 'Close search (Esc)',
+            onPressed: _closeSearch,
+          ),
+        ],
+      ),
     );
   }
 
@@ -123,7 +511,7 @@ class ChatPage extends StatelessWidget {
     // "reconnecting" on the default runtime. The live signal takes over once
     // resolved.
     final resolved = vm.connectionResolved;
-    final isOnline = resolved ? vm.isRoomLive : initialOnline;
+    final isOnline = resolved ? vm.isRoomLive : widget.initialOnline;
     // Plan-18 follow-up — when the chat is "offline" (WS to relay
     // down or retrying), prefer a "reconectando" amber pill so the
     // user knows it's the relay, not the Pi cwd, that's gone.
@@ -136,11 +524,11 @@ class ChatPage extends StatelessWidget {
     // either line of the AppBar (room or peer) shows it instead of
     // the generic placeholders when the ViewModel hasn't finished
     // bootstrapping yet.
-    final roomName = _roomDisplayName(room, state, initialTitle);
+    final roomName = _roomDisplayName(room, state, widget.initialTitle);
     // Plan/32g — line 2 (device) falls back to `initialDevice` (the Mac name
     // Home passed), NOT `initialTitle` (the room name) — so it shows the right
     // device from frame 1 and doesn't flip when the PeerRecord loads.
-    final peerLabel = _peerDisplayName(peer, initialDevice);
+    final peerLabel = _peerDisplayName(peer, widget.initialDevice);
 
     return Container(
       height: 56,
@@ -151,7 +539,7 @@ class ChatPage extends StatelessWidget {
       ),
       child: Row(
         children: [
-          if (showBack)
+          if (widget.showBack)
             IconButton(
               icon: Icon(LucideIcons.chevronLeft, size: 18, color: colors.text),
               tooltip: 'Back',
@@ -238,6 +626,18 @@ class ChatPage extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+          IconButton(
+            key: const Key('chat-search-button'),
+            icon: Icon(
+              _searchOpen ? LucideIcons.searchX : LucideIcons.search,
+              size: 18,
+              color: _searchOpen ? colors.accent : colors.muted2,
+            ),
+            tooltip: _searchOpen
+                ? 'Close search (Esc)'
+                : 'Search chat (Ctrl+F)',
+            onPressed: _toggleSearch,
           ),
           // Plan/32g follow-up: ALWAYS render the info button. Gating it on the
           // async PeerRecord made it pop in on load → an AppBar layout shift
@@ -365,8 +765,17 @@ class ChatPage extends StatelessWidget {
   static String _truncate(String s, int max) =>
       s.length <= max ? s : '${s.substring(0, max - 1)}…';
 
-  Widget _buildBody(BuildContext context, ChatState state, ChatViewModel vm) {
-    final hideToolCalls = context.watch<Preferences>().hideToolCalls;
+  Widget _buildBody(
+    BuildContext context,
+    ChatState state,
+    ChatViewModel vm,
+    List<ChatMessage> visibleMessages,
+    List<ChatMessage> displayedMessages,
+    Set<String> matchedIdSet,
+    bool filterActive,
+    String query,
+    String? activeMatchId,
+  ) {
     return switch (state) {
       // Edge case: opened /chat without a peer (e.g. peer revoked while
       // user was here). The chat is not the place to pair — render
@@ -386,23 +795,31 @@ class ChatPage extends StatelessWidget {
         actionLabel: 'Re-pair',
         onAction: () => context.go('/pair'),
       ),
-      ChatReady(:final messages, :final streaming) => () {
-        final visible = hideToolCalls
-            ? messages.where((m) => m is! ToolEvent).toList()
-            : messages;
+      ChatReady(:final streaming) => () {
         // Empty body → the default placeholder (Pi brand icon + "Nothing
         // here"), shown whenever there's nothing to render — including while
         // reconnecting (the reconnect handshake never swaps the body).
-        if (visible.isEmpty && streaming == null) {
+        if (visibleMessages.isEmpty && streaming == null) {
           return const _EmptyState(
             icon: LucideIcons.terminal,
             message: 'Nothing here',
           );
         }
+
+        if (filterActive && displayedMessages.isEmpty) {
+          return _EmptyState(
+            icon: LucideIcons.searchX,
+            message: 'No messages match "$query"',
+          );
+        }
+
         return _MessageList(
-          messages: visible,
-          streaming: streaming,
+          messages: displayedMessages,
+          streaming: filterActive ? null : streaming,
           onDecide: (id, decision) => vm.approveTool(id, decision),
+          scrollController: _scrollController,
+          activeMatchId: activeMatchId,
+          matchedIds: matchedIdSet,
         );
       }(),
     };
@@ -410,11 +827,6 @@ class ChatPage extends StatelessWidget {
 
   Widget _buildInput(BuildContext context, ChatState state, ChatViewModel vm) {
     final isReady = state is ChatReady;
-    final isOffline = isReady && state.isOffline;
-    final isRevoked = isReady && state.pairingRevoked;
-    final isPeerOffline = isReady && state.peerOfflineReason != null;
-    // Live relay-reported offline (no `bye`): Pi is just not reachable.
-    final isPresenceOffline = isReady && state.peerPresence is PresenceOffline;
     // Plan/31 — the composer is locked + the send button becomes "stop" for
     // the WHOLE working turn (send/echo → agent_done), not just the narrow
     // token-streaming window. Driven by the broad working signal so it matches
@@ -425,20 +837,10 @@ class ChatPage extends StatelessWidget {
     // entry point when the chat input itself is enabled. Hiding the
     // ⚙ button on offline avoids a tap that would just throw inside
     // the sheet.
-    final actionsEnabled =
-        isReady &&
-        !isOffline &&
-        !isRevoked &&
-        !isPeerOffline &&
-        !isPresenceOffline;
+    final actionsEnabled = _isActionsEnabled(state);
 
     return InputBar(
-      disabled:
-          !isReady ||
-          isOffline ||
-          isRevoked ||
-          isPeerOffline ||
-          isPresenceOffline,
+      disabled: !actionsEnabled,
       streaming: isWorking,
       onCancel: cancelId != null ? () => vm.cancel(cancelId) : null,
       onOpenQuickActions: actionsEnabled
@@ -567,11 +969,17 @@ class _MessageList extends StatelessWidget {
   final List<ChatMessage> messages;
   final StreamingMessage? streaming;
   final void Function(String, ApproveDecision) onDecide;
+  final ScrollController? scrollController;
+  final String? activeMatchId;
+  final Set<String> matchedIds;
 
   const _MessageList({
     required this.messages,
     required this.streaming,
     required this.onDecide,
+    this.scrollController,
+    this.activeMatchId,
+    this.matchedIds = const {},
   });
 
   @override
@@ -583,6 +991,7 @@ class _MessageList extends StatelessWidget {
     // needed. The previous animateTo-on-every-rebuild fought this and caused
     // overlapping animations (flicker / runaway scroll) during streaming.
     return ListView.separated(
+      controller: scrollController,
       reverse: true,
       padding: const EdgeInsets.fromLTRB(16, 18, 16, 12),
       itemCount: itemCount,
@@ -602,16 +1011,96 @@ class _MessageList extends StatelessWidget {
         }
         final msgIdx = messages.length - 1 - (i - (streaming != null ? 1 : 0));
         final msg = messages[msgIdx];
+        final isMatch = matchedIds.contains(msg.id);
+        final isActiveMatch = msg.id == activeMatchId;
+
+        final bubble = switch (msg) {
+          UserMsg() => UserBubble(msg),
+          AssistantMsg() => AssistantBubble(msg),
+          ToolEvent() => ToolRequestCard(tool: msg, onDecide: onDecide),
+          CompactionMsg() => CompactionBubble(msg),
+        };
+
+        final highlightedBubble = !isMatch
+            ? bubble
+            : _SearchMatchWrapper(
+                isActive: isActiveMatch,
+                child: bubble,
+              );
+
         return KeyedSubtree(
           key: ValueKey(msg.id),
-          child: switch (msg) {
-            UserMsg() => UserBubble(msg),
-            AssistantMsg() => AssistantBubble(msg),
-            ToolEvent() => ToolRequestCard(tool: msg, onDecide: onDecide),
-            CompactionMsg() => CompactionBubble(msg),
-          },
+          child: highlightedBubble,
         );
       },
+    );
+  }
+}
+
+class _SearchMatchWrapper extends StatelessWidget {
+  final bool isActive;
+  final Widget child;
+
+  const _SearchMatchWrapper({
+    required this.isActive,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final typo = context.typo;
+
+    if (!isActive) {
+      return Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: colors.accent.withValues(alpha: 0.35),
+            width: 1.5,
+          ),
+        ),
+        padding: const EdgeInsets.all(2),
+        child: child,
+      );
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: colors.accent, width: 2),
+        boxShadow: [
+          BoxShadow(
+            color: colors.accent.withValues(alpha: 0.25),
+            blurRadius: 8,
+            spreadRadius: 1,
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(3),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            margin: const EdgeInsets.only(bottom: 4, left: 2, top: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+            decoration: BoxDecoration(
+              color: colors.accent,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              'MATCH',
+              style: typo.monoSmall.copyWith(
+                fontSize: 9,
+                fontWeight: FontWeight.w700,
+                color: colors.bg,
+              ),
+            ),
+          ),
+          child,
+        ],
+      ),
     );
   }
 }

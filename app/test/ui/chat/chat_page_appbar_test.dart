@@ -23,6 +23,7 @@ import 'package:app/ui/chat/chat_page.dart';
 import 'package:app/ui/chat/viewmodels/chat_viewmodel.dart';
 import 'package:app/ui/chat/voice/viewmodels/voice_input_viewmodel.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
@@ -128,9 +129,35 @@ void main() {
       // we know the subtitle isn't just echoing the title fallback.
       expect(find.text('My Project'), findsOneWidget);
 
-      // The info button renders immediately — even with no PeerRecord loaded
-      // (activePeer == null here) — so it never pops in and shifts the AppBar.
+      // The info and search buttons render immediately.
       expect(find.byIcon(LucideIcons.info), findsOneWidget);
+      final searchBtn = find.byKey(const Key('chat-search-button'));
+      expect(searchBtn, findsOneWidget);
+
+      // Tapping search opens search bar with text field.
+      expect(find.byKey(const Key('chat-search-bar')), findsNothing);
+      await tester.tap(searchBtn);
+      await tester.pump();
+      expect(find.byKey(const Key('chat-search-bar')), findsOneWidget);
+      expect(find.byKey(const Key('chat-search-textfield')), findsOneWidget);
+
+      // Tapping close search button closes it.
+      await tester.tap(find.byKey(const Key('chat-search-close-button')));
+      await tester.pump();
+      expect(find.byKey(const Key('chat-search-bar')), findsNothing);
+
+      // Ctrl+F shortcut opens search.
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.keyF);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.keyF);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+      expect(find.byKey(const Key('chat-search-bar')), findsOneWidget);
+
+      // Escape key closes search.
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump();
+      expect(find.byKey(const Key('chat-search-bar')), findsNothing);
 
       // Status dot uses initialOnline before the runtime resolves → shows
       // "online" immediately instead of flashing offline/reconnecting.
