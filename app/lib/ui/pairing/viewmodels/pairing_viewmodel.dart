@@ -73,14 +73,14 @@ class PairingViewModel extends ViewModel<PairingState> {
             transport: transport,
             storage: _storage,
             deviceName: _deviceName(),
-            currentRelayUrl: resolveRelayUrl(_prefs),
+            currentRelayUrl: currentRelayUrl,
           )
           .timeout(
             const Duration(seconds: 30),
             onTimeout: () => throw const pair_flow.PairingError(
               code: 'pair_timeout',
               message:
-                  'Timed out — make sure /remote-pi is running on your Mac',
+                  'Timed out — make sure /remote-pi is running on your host',
             ),
           );
 
@@ -100,6 +100,9 @@ class PairingViewModel extends ViewModel<PairingState> {
       emit(PairingError(message: e.toString(), canRetry: true));
     }
   }
+
+  /// Effective relay URL used for pairing.
+  String get currentRelayUrl => resolveRelayUrl(_prefs);
 
   /// Retry after an error.
   void retry() => emit(const PairingScanning());
@@ -133,10 +136,10 @@ class PairingViewModel extends ViewModel<PairingState> {
   }
 
   static String _friendlyError(pair_flow.PairingError e) => switch (e.code) {
-    'token_expired' => 'QR expired — generate a new one on your Mac',
+    'token_expired' => 'QR expired — generate a new one on your host',
     'token_consumed' => 'QR already used — generate a new one',
-    'token_unknown' => 'QR not recognized by Mac — re-run /remote-pi pair',
-    'pair_timeout' => 'Timed out — make sure /remote-pi is running on your Mac',
+    'token_unknown' => 'QR not recognized by host — re-run /remote-pi pair',
+    'pair_timeout' => 'Timed out — make sure /remote-pi is running on your host',
     _ => e.message.isEmpty ? e.code : e.message,
   };
 
