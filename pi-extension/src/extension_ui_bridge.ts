@@ -35,6 +35,11 @@ const PI_ASK_COMPLETED = "@eko24ive/pi-ask:completed";
 const PI_ASK_SUBMIT = "@eko24ive/pi-ask:submit";
 const PI_ASK_SUBMIT_RESULT = "@eko24ive/pi-ask:submit-result";
 
+const RPIV_PROMPT = "rpiv:ask-user:prompt";
+const RPIV_BLOCKED = "rpiv:ask-user:blocked";
+const RPIV_ANSWER = "rpiv:ask-user:answer";
+const RPIV_ANSWER_RESULT = "rpiv:ask-user:answer-result";
+
 /** Drop a flow from `activeFlows` if pi-ask never resolves it (e.g. a flow
  *  disposed on session_shutdown — pi-ask does not emit `completed` for those).
  *  Bounds memory; generous vs. a human answer time. */
@@ -131,6 +136,42 @@ export function createExtensionUiBridge(
     );
   }
 
+  function dismissFlow(flowId: string): void {
+    clearFlowTtl(flowId);
+    activeFlows.delete(flowId);
+    // Same id as the originating request (the flowId). The app treats a `notify`
+    // whose id matches an open interactive request as "that flow resolved —
+    // dismiss it". Covers the non-submitting owner in a multi-owner setup.
+    broadcast({
+      type: "extension_ui_request",
+      id: flowId,
+      method: "notify",
+      message: "Clarification resolved.",
+    });
+  }
+
+  function warnFlow(rawFlowId: unknown, message: string): void {
+    const flowId =
+      typeof rawFlowId === "string"
+        ? rawFlowId
+        : activeFlows.size === 1
+          // Defensive: pi-ask always carries flowId. If it's ever absent, an
+          // unambiguous single active flow is a safe attribution; with zero or
+          // several, the warning is uncorrelatable and the app ignores
+          // unmatched notifies — drop it instead of broadcasting a random id
+          // no client can act on.
+          ? activeFlows.keys().next().value
+          : undefined;
+    if (!flowId) return;
+    broadcast({
+      type: "extension_ui_request",
+      id: flowId,
+      method: "notify",
+      message,
+      notify_type: "warning",
+    });
+  }
+
   const unsubStarted = events.on(PI_ASK_STARTED, (raw: unknown) => {
     const event = parseStartedEvent(raw);
     if (!event) return;
@@ -149,18 +190,7 @@ export function createExtensionUiBridge(
   const unsubCompleted = events.on(PI_ASK_COMPLETED, (raw: unknown) => {
     const e = raw as { version?: number; flowId?: unknown } | null;
     if (!e || e.version !== 1 || typeof e.flowId !== "string") return;
-    const flowId = e.flowId;
-    clearFlowTtl(flowId);
-    activeFlows.delete(flowId);
-    // Same id as the originating request (the flowId). The app treats a `notify`
-    // whose id matches an open interactive request as "that flow resolved —
-    // dismiss it". Covers the non-submitting owner in a multi-owner setup.
-    broadcast({
-      type: "extension_ui_request",
-      id: flowId,
-      method: "notify",
-      message: "Clarification resolved.",
-    });
+    dismissFlow(e.flowId);
   });
 
   // submit-result is per-request feedback. On error (invalid answer / flow
@@ -185,29 +215,44 @@ export function createExtensionUiBridge(
         : typeof e.error === "string"
           ? e.error
           : "Clarification answer was not accepted.";
-    const flowId =
-      typeof e.flowId === "string"
-        ? e.flowId
-        : activeFlows.size === 1
-          // Defensive: pi-ask always carries flowId. If it's ever absent, an
-          // unambiguous single active flow is a safe attribution; with zero or
-          // several, the warning is uncorrelatable and the app ignores
-          // unmatched notifies — drop it instead of broadcasting a random id
-          // no client can act on.
-          ? activeFlows.keys().next().value
-          : undefined;
-    if (!flowId) return;
-    broadcast({
-      type: "extension_ui_request",
-      id: flowId,
-      method: "notify",
-      message,
-      notify_type: "warning",
-    });
+    warnFlow(e.flowId, message);
+  });
+
+  const unsubRpivPrompt = events.on(RPIV_PROMPT, (raw: unknown) => {
+    const flow = parseRpivPromptEvent(raw);
+    if (!flow) return;
+    activeFlows.set(flow.flowId, flow);
+    armFlowTtl(flow.flowId);
+    broadcast(requestForFlow(flow));
+  });
+
+  const unsubRpivBlocked = events.on(RPIV_BLOCKED, (raw: unknown) => {
+    const e = raw as { active?: unknown; toolCallId?: unknown } | null;
+    if (!e || e.active !== false || typeof e.toolCallId !== "string") return;
+    if (!activeFlows.has(e.toolCallId)) return;
+    dismissFlow(e.toolCallId);
+  });
+
+  const unsubRpivResult = events.on(RPIV_ANSWER_RESULT, (raw: unknown) => {
+    const e = raw as { ok?: unknown; reason?: unknown; toolCallId?: unknown } | null;
+    if (!e || e.ok === true) return;
+    warnFlow(
+      e.toolCallId,
+      typeof e.reason === "string"
+        ? e.reason
+        : "Clarification answer was not accepted.",
+    );
   });
 
   function respond(msg: ExtensionUiResponseWire): void {
     const ask = msg.ask;
+    const targetFlowId =
+      ask?.flow_id ?? (activeFlows.has(msg.id) ? msg.id : null);
+    const targetFlow = targetFlowId ? activeFlows.get(targetFlowId) : undefined;
+    if (targetFlow?.source === "rpiv") {
+      respondRpiv(msg, targetFlow);
+      return;
+    }
 
     // Explicit cancel — with or without the ask envelope. A strict client
     // (no envelope) only carries the request id, which IS the flowId by this
@@ -258,6 +303,76 @@ export function createExtensionUiBridge(
     });
   }
 
+  function emitRpivAnswer(payload: Record<string, unknown>): void {
+    try {
+      events.emit(RPIV_ANSWER, payload);
+    } catch {
+      // ignore
+    }
+  }
+
+  function respondRpiv(msg: ExtensionUiResponseWire, flow: ActiveFlow): void {
+    const ask = msg.ask;
+    const toolCallId = flow.toolCallId ?? flow.flowId;
+    if (
+      ("cancelled" in msg && msg.cancelled === true) ||
+      (ask !== undefined && ask.kind === "cancel")
+    ) {
+      emitRpivAnswer({ toolCallId, requestId: msg.id, cancel: true });
+      return;
+    }
+
+    if (ask !== undefined && ask.kind === "answer") {
+      const answers = flow.questions.map((q, i) => {
+        const ans = ask.answers?.[q.id];
+        const picked = (ans?.values ?? [])
+          .map((v) => q.options.findIndex((o) => o.value === v || o.label === v))
+          .filter((idx) => idx >= 0);
+        const custom =
+          typeof ans?.customText === "string" && ans.customText.trim().length > 0
+            ? ans.customText.trim()
+            : undefined;
+        const notes =
+          typeof ans?.note === "string" && ans.note.trim().length > 0
+            ? ans.note.trim()
+            : undefined;
+        if (q.type === "multi") {
+          return {
+            questionIndex: i,
+            ...(picked.length > 0 ? { optionIndexes: picked } : {}),
+            ...(custom ? { text: custom } : {}),
+            ...(notes ? { notes } : {}),
+          };
+        }
+        return {
+          questionIndex: i,
+          ...(custom
+            ? { text: custom }
+            : picked.length > 0
+              ? { optionIndexes: [picked[0]!] }
+              : {}),
+          ...(notes ? { notes } : {}),
+        };
+      });
+      emitRpivAnswer({ toolCallId, requestId: msg.id, answers });
+      return;
+    }
+
+    const q0 = flow.questions[0];
+    if (!q0) return;
+    const label = "value" in msg ? String(msg.value) : "";
+    const matchIdx = q0.options.findIndex((o) => o.label === label);
+    emitRpivAnswer({
+      toolCallId,
+      requestId: msg.id,
+      answers: [
+        matchIdx >= 0
+          ? { questionIndex: 0, optionIndexes: [matchIdx] }
+          : { questionIndex: 0, text: label },
+      ],
+    });
+  }
+
   function emitSubmit(
     requestId: string,
     flowId: string,
@@ -292,6 +407,9 @@ export function createExtensionUiBridge(
       unsubStarted();
       unsubCompleted();
       unsubResult();
+      unsubRpivPrompt();
+      unsubRpivBlocked();
+      unsubRpivResult();
       for (const t of flowTimers.values()) clearTimeout(t);
       flowTimers.clear();
       activeFlows.clear();
@@ -345,6 +463,49 @@ interface StartedEvent {
   source?: string;
   title?: string;
   questions: AskQuestionWire[];
+}
+
+function parseRpivPromptEvent(raw: unknown): ActiveFlow | null {
+  if (!isRecord(raw) || !Array.isArray(raw.questions) || raw.questions.length === 0) {
+    return null;
+  }
+  const flowId =
+    typeof raw.toolCallId === "string" && raw.toolCallId.length > 0
+      ? raw.toolCallId
+      : `rpiv_${Date.now()}`;
+  const questions: AskQuestionWire[] = [];
+  for (let i = 0; i < raw.questions.length; i++) {
+    const q = raw.questions[i];
+    if (!isRecord(q) || typeof q.question !== "string" || !Array.isArray(q.options)) {
+      return null;
+    }
+    const options: AskOptionWire[] = [];
+    for (const o of q.options) {
+      if (!isRecord(o) || typeof o.label !== "string" || o.label.length === 0) {
+        return null;
+      }
+      options.push({
+        value: o.label,
+        label: o.label,
+        description: asString(o.description),
+      });
+    }
+    questions.push({
+      id: `q_${i}`,
+      label: typeof q.header === "string" && q.header.length > 0 ? q.header : q.question,
+      prompt: q.question,
+      type: q.multiSelect === true ? "multi" : "single",
+      required: true,
+      options,
+    });
+  }
+  return {
+    flowId,
+    toolCallId: flowId,
+    source: "rpiv",
+    title: null,
+    questions,
+  };
 }
 
 function parseStartedEvent(raw: unknown): StartedEvent | null {
