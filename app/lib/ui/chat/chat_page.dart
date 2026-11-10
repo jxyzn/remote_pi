@@ -2,6 +2,7 @@ import 'package:app/data/preferences/preferences.dart';
 import 'package:app/domain/session_state.dart';
 import 'package:app/pairing/storage.dart';
 import 'package:app/protocol/protocol.dart';
+import 'package:app/routing/adaptive.dart';
 import 'package:app/ui/core/themes/themes.dart';
 import 'package:app/ui/chat/quick_actions/widgets/quick_actions_sheet.dart';
 import 'package:app/ui/chat/attachment/states/attachment_state.dart';
@@ -141,6 +142,8 @@ class ChatPage extends StatelessWidget {
     // Home passed), NOT `initialTitle` (the room name) — so it shows the right
     // device from frame 1 and doesn't flip when the PeerRecord loads.
     final peerLabel = _peerDisplayName(peer, initialDevice);
+    final shell = context.watch<ShellLayout?>();
+    final sidebarCollapsed = shell?.isSidebarCollapsed ?? false;
 
     return Container(
       height: 56,
@@ -157,6 +160,18 @@ class ChatPage extends StatelessWidget {
               tooltip: 'Back',
               onPressed: () =>
                   context.canPop() ? context.pop() : context.go('/home'),
+            )
+          else if (shell != null)
+            IconButton(
+              icon: Icon(
+                sidebarCollapsed
+                    ? LucideIcons.panelLeftOpen
+                    : LucideIcons.panelLeftClose,
+                size: 18,
+                color: colors.text,
+              ),
+              tooltip: sidebarCollapsed ? 'Show sessions' : 'Hide sessions',
+              onPressed: shell.toggleSidebar,
             )
           else
             const SizedBox(width: 16),

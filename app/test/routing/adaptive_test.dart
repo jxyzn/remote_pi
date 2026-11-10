@@ -262,6 +262,20 @@ void main() {
         expect(find.text('DETAIL'), findsOneWidget);
       },
     );
+
+    test(
+      'ShellLayout.toggleSidebar flips isSidebarCollapsed and setZeroState(true) resets it',
+      () {
+        final shell = ShellLayout();
+        expect(shell.isSidebarCollapsed, isFalse);
+
+        shell.toggleSidebar();
+        expect(shell.isSidebarCollapsed, isTrue);
+
+        shell.setZeroState(true);
+        expect(shell.isSidebarCollapsed, isFalse);
+      },
+    );
   });
 
   group('two-pane SafeArea insets (side insets beside the divider)', () {

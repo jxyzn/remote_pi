@@ -65,11 +65,22 @@ class ResponsiveCenter extends StatelessWidget {
 /// single→split no caso comum de já existirem sessões no boot.
 class ShellLayout extends ChangeNotifier {
   bool _zeroState = false;
+  bool _sidebarCollapsed = false;
+
   bool get isZeroState => _zeroState;
+  bool get isSidebarCollapsed => _sidebarCollapsed;
 
   void setZeroState(bool value) {
     if (value == _zeroState) return;
     _zeroState = value;
+    if (value) {
+      _sidebarCollapsed = false;
+    }
+    notifyListeners();
+  }
+
+  void toggleSidebar() {
+    _sidebarCollapsed = !_sidebarCollapsed;
     notifyListeners();
   }
 }
