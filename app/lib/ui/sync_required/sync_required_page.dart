@@ -1,5 +1,7 @@
 import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
+
 import 'package:app/config/dependencies.dart';
 import 'package:app/pairing/owner_identity_bridge.dart';
 import 'package:app/ui/core/themes/themes.dart';
@@ -36,7 +38,7 @@ class _SyncRequiredPageState extends State<SyncRequiredPage> {
 
   @override
   Widget build(BuildContext context) {
-    final isIOS = Platform.isIOS;
+    final isIOS = !kIsWeb && Platform.isIOS;
     final requirements = isIOS ? _iosRequirements : _androidRequirements;
     final why = isIOS
         ? 'Remote Pi keeps your Ed25519 owner key in iCloud Keychain so '

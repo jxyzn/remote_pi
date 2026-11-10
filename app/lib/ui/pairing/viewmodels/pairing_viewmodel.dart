@@ -1,5 +1,6 @@
 import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:app/data/preferences/preferences.dart';
 import 'package:app/data/transport/connection_manager.dart';
 import 'package:app/data/transport/peer_channel.dart';
@@ -142,6 +143,7 @@ class PairingViewModel extends ViewModel<PairingState> {
 
   static String _deviceName() {
     try {
+      if (kIsWeb) return 'Web Browser';
       if (Platform.isIOS) return 'iPhone';
       if (Platform.isAndroid) return 'Android device';
       return 'Mobile';

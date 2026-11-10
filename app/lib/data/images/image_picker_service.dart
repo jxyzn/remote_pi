@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:image_picker/image_picker.dart';
@@ -18,6 +19,10 @@ abstract class IImagePickerService {
   /// Pick from the gallery (system PHPicker / Photo Picker — no permission).
   /// Returns null if the user cancelled.
   Future<PickedImage?> pickFromGallery();
+
+  /// Compresses raw image bytes (e.g. from drag & drop or clipboard paste)
+  /// according to the same dimension and quality constraints.
+  Future<PickedImage?> processImageBytes(Uint8List rawBytes, [String? mime]);
 }
 
 /// A picked + compressed image ready for preview and sending. Bytes are raw
@@ -64,13 +69,43 @@ class ImagePickerService implements IImagePickerService {
   Future<PickedImage?> pickFromGallery() =>
       _pickAndCompress(ImageSourceKind.gallery);
 
+  @override
+  Future<PickedImage?> processImageBytes(
+    Uint8List rawBytes, [
+    String? mime,
+  ]) async {
+    if (rawBytes.isEmpty) return null;
+    final bytes = await _compressWithCeiling(
+      (side, quality) =>
+          _backend.compressBytes(rawBytes, maxSide: side, quality: quality),
+      fallback: rawBytes,
+    );
+    final resolvedMime = identical(bytes, rawBytes)
+        ? (mime ?? 'image/jpeg')
+        : 'image/jpeg';
+    return PickedImage(bytes: bytes, mime: resolvedMime);
+  }
+
   Future<PickedImage?> _pickAndCompress(ImageSourceKind source) async {
     final path = await _backend.pick(source);
     if (path == null) return null; // user cancelled
+    final bytes = await _compressWithCeiling(
+      (side, quality) =>
+          _backend.compress(path, maxSide: side, quality: quality),
+    );
+    return PickedImage(bytes: bytes, mime: 'image/jpeg');
+  }
 
+  Future<Uint8List> _compressWithCeiling(
+    Future<Uint8List> Function(int maxSide, int quality) compressPass, {
+    Uint8List? fallback,
+  }) async {
     var side = _maxSide;
     var quality = _quality;
-    var bytes = await _backend.compress(path, maxSide: side, quality: quality);
+    var bytes = await compressPass(side, quality);
+    if (bytes.isEmpty && fallback != null) {
+      bytes = fallback;
+    }
 
     // Iterative ceiling: shrink dimension + quality until under the cap (or
     // we run out of passes). Practically never fires.
@@ -79,10 +114,11 @@ class ImagePickerService implements IImagePickerService {
       pass++;
       quality = (quality - 15).clamp(35, 100);
       side = (side * 0.85).round();
-      bytes = await _backend.compress(path, maxSide: side, quality: quality);
+      final next = await compressPass(side, quality);
+      if (next.isEmpty && fallback != null) break;
+      bytes = next;
     }
-
-    return PickedImage(bytes: bytes, mime: 'image/jpeg');
+    return bytes;
   }
 }
 
@@ -104,6 +140,13 @@ abstract class ImagePickerBackend {
     required int maxSide,
     required int quality,
   });
+
+  /// Compress raw [bytes] to JPEG bounded by [maxSide]px at [quality].
+  Future<Uint8List> compressBytes(
+    Uint8List bytes, {
+    required int maxSide,
+    required int quality,
+  }) async => compress('', maxSide: maxSide, quality: quality);
 }
 
 class PlatformImagePickerBackend implements ImagePickerBackend {
@@ -111,6 +154,7 @@ class PlatformImagePickerBackend implements ImagePickerBackend {
     : _picker = picker ?? ImagePicker();
 
   final ImagePicker _picker;
+  Uint8List? _lastPickedBytes;
 
   @override
   Future<String?> pick(ImageSourceKind source) async {
@@ -120,7 +164,14 @@ class PlatformImagePickerBackend implements ImagePickerBackend {
             ? ImageSource.camera
             : ImageSource.gallery,
       );
-      return file?.path;
+      if (file == null) {
+        _lastPickedBytes = null;
+        return null;
+      }
+      if (kIsWeb) {
+        _lastPickedBytes = await file.readAsBytes();
+      }
+      return file.path;
     } on PlatformException catch (e) {
       // image_picker surfaces a denied camera/photo permission as a
       // PlatformException with an `*_access_denied` code.
@@ -137,6 +188,13 @@ class PlatformImagePickerBackend implements ImagePickerBackend {
     required int maxSide,
     required int quality,
   }) async {
+    if (kIsWeb && _lastPickedBytes != null) {
+      return compressBytes(
+        _lastPickedBytes!,
+        maxSide: maxSide,
+        quality: quality,
+      );
+    }
     final out = await FlutterImageCompress.compressWithFile(
       path,
       minWidth: maxSide,
@@ -147,5 +205,24 @@ class PlatformImagePickerBackend implements ImagePickerBackend {
     // Fallback: if the platform compressor returns null (unsupported source
     // format), surface an empty result so the caller can no-op gracefully.
     return out ?? Uint8List(0);
+  }
+
+  @override
+  Future<Uint8List> compressBytes(
+    Uint8List bytes, {
+    required int maxSide,
+    required int quality,
+  }) async {
+    try {
+      final out = await FlutterImageCompress.compressWithList(
+        bytes,
+        minWidth: maxSide,
+        minHeight: maxSide,
+        quality: quality,
+        format: CompressFormat.jpeg,
+      );
+      if (out.isNotEmpty) return out;
+    } catch (_) {}
+    return bytes;
   }
 }

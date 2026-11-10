@@ -4,10 +4,12 @@ import 'package:app/data/images/image_picker_service.dart';
 import 'package:app/domain/session_state.dart';
 import 'package:app/ui/chat/attachment/states/attachment_state.dart';
 import 'package:app/ui/chat/attachment/viewmodels/attachment_viewmodel.dart';
+import 'package:app/ui/chat/attachment/web_attachment_bridge.dart';
 import 'package:app/ui/chat/voice/states/voice_input_state.dart';
 import 'package:app/ui/chat/voice/viewmodels/voice_input_viewmodel.dart';
 import 'package:app/ui/chat/voice/widgets/recording_strip.dart';
 import 'package:app/ui/core/themes/themes.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -101,12 +103,15 @@ class _InputBarState extends State<InputBar> {
   // (the permission prompt ended the hold), the recording is discarded.
   bool _holding = false;
   StreamSubscription<String>? _transcriptSub;
+  WebAttachmentHandle? _webAttachmentHandle;
+  bool _isDraggingOver = false;
 
   @override
   void initState() {
     super.initState();
     _controller.addListener(_onTextChange);
     _subscribeTranscripts();
+    _initWebAttachmentBridge();
   }
 
   @override
@@ -115,6 +120,29 @@ class _InputBarState extends State<InputBar> {
     if (!identical(old.voice, widget.voice)) {
       _transcriptSub?.cancel();
       _subscribeTranscripts();
+    }
+    if (!identical(old.attachment, widget.attachment)) {
+      _webAttachmentHandle?.dispose();
+      _initWebAttachmentBridge();
+    }
+  }
+
+  void _initWebAttachmentBridge() {
+    if (widget.attachment != null) {
+      _webAttachmentHandle = WebAttachmentBridge.attach(
+        onImage: (bytes, mime) {
+          if (mounted && widget.attachment != null && !widget.disabled) {
+            widget.attachment!.attachFromBytes(bytes, mime);
+          }
+        },
+        onDragStateChanged: (isDragging) {
+          if (mounted && _isDraggingOver != isDragging) {
+            setState(() {
+              _isDraggingOver = isDragging;
+            });
+          }
+        },
+      );
     }
   }
 
@@ -140,6 +168,7 @@ class _InputBarState extends State<InputBar> {
 
   @override
   void dispose() {
+    _webAttachmentHandle?.dispose();
     _transcriptSub?.cancel();
     _controller.removeListener(_onTextChange);
     _controller.dispose();
@@ -301,7 +330,8 @@ class _InputBarState extends State<InputBar> {
 
     // Plan/30 — attachment.
     final hasImage = attachState is AttachmentAttached;
-    final visionBlocked = attachState?.attachBlockedByVision ?? false;
+    final visionBlocked =
+        !kIsWeb && (attachState?.attachBlockedByVision ?? false);
     final hasContent = !_empty || hasImage;
     final attachEnabled =
         widget.onOpenAttach != null &&
@@ -331,8 +361,14 @@ class _InputBarState extends State<InputBar> {
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 10, 14, 22),
       decoration: BoxDecoration(
-        color: colors.bg,
-        border: Border(top: BorderSide(color: colors.border)),
+        color: _isDraggingOver
+            ? colors.accent.withValues(alpha: 0.08)
+            : colors.bg,
+        border: Border(
+          top: BorderSide(
+            color: _isDraggingOver ? colors.accent : colors.border,
+          ),
+        ),
       ),
       child: Stack(
         children: [
@@ -391,7 +427,9 @@ class _InputBarState extends State<InputBar> {
                       ),
                       cursorColor: colors.accent,
                       decoration: InputDecoration(
-                        hintText: widget.disabled
+                        hintText: _isDraggingOver
+                            ? 'Drop image here to attach…'
+                            : widget.disabled
                             ? 'Offline…'
                             : widget.streaming
                             ? 'Steer current response…'
@@ -399,7 +437,7 @@ class _InputBarState extends State<InputBar> {
                             ? 'Add a caption…'
                             : 'Send a message…',
                         hintStyle: TextStyle(
-                          color: colors.muted,
+                          color: _isDraggingOver ? colors.accent : colors.muted,
                           fontFamily: kMonoFamily,
                         ),
                         contentPadding: const EdgeInsets.symmetric(
